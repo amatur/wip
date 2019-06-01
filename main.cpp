@@ -1,6 +1,5 @@
-// --- VERSION 1.7 ----
+// --- VERSION 1.5 ----
 // Bug fixed and validated
-// input format input.txt
 
 #include<cmath>
 #include <fstream>
@@ -54,44 +53,25 @@ typedef struct {
     int kmerEndIndex;
 } newEdge_t;
 
-
-//int DEBUG = 10;
-bool INDEGREE_DFS = true;
-bool SIGN_INDEGREE_DFS = false;
-
-
-int isolated_node_count = 0;
-int onecount = 0;
-int sink_count = 0;
-int source_count = 0;
-
-
-struct node_sorter {
-    int node;
-    int sortkey;
-    //bool operator() (node_indegree i, node_indegree j) { return (i<j);}
-};
-//degreenode;
-
-bool sort_by_key (struct node_sorter i, struct node_sorter j) { return (i.sortkey<j.sortkey); }
-
-//struct node_indegree* global_indegree;
-int* global_indegree;
-int* global_outdegree;
-int* global_plusindegree;
-int* global_plusoutdegree;
-
+//int DEBUGFLAG = -10;
+enum DEBUGFLAG_T { NONE = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUG = 3, PARTICULAR = 3, OLDNEWMAP = 9, NEWOLDMAP = 9, PRINTER = 10, UKDEBUG = 11 };
+DEBUGFLAG_T DEBUGFLAG = UKDEBUG;
 
 // ------- PARAMETERS -------- //
+//int K = 21;
+//string UNITIG_FILE = "exclude/human.k21.a2.unitigs.fa";
+
+//int K = 21;
+//string UNITIG_FILE = "exclude/list_reads.unitigs.human.fa";
+
 //int K = 11;
 //string UNITIG_FILE = "data/list_reads.unitigs.fa";
 
-int K;
-string UNITIG_FILE;
+int K = 55;
+string UNITIG_FILE = "/Volumes/FAT32/chol55/list_reads.unitigs.fa";
+
 
 vector<vector<edge_t> > adjList;
-vector<vector<edge_t> > reverseAdjList;
-
 vector<vector<newEdge_t> > newAdjList;
 vector<edge_both_t> resolveLaterEdges;
 vector<unitig_struct_t> unitigs;
@@ -199,7 +179,6 @@ inline char boolToCharSign(bool sign) {
 
 
 // @@ --- ALL PRINTING CODE --- //
-
 void printBCALMGraph(vector<vector<edge_t> > adjList) {
     for (int i = 0; i < adjList.size(); i++) {
         cout << i << "# ";
@@ -212,14 +191,9 @@ void printBCALMGraph(vector<vector<edge_t> > adjList) {
 
 void printAllBCALMSequences(vector<unitig_struct_t> unitigs) {
     for (unitig_struct_t unitig : unitigs) {
-        cout << unitig.serial << ": " << unitig.ln << " " << unitig.sequence.length() << endl; //sequence only^
-        // full print
-        //cout<<unitig.serial<<": "<<unitig.ln<<" "<<unitig.sequence.length()<<":"<<unitig.sequence<<endl;
+        cout << unitig.serial << ": " << unitig.ln << " " << unitig.sequence.length() << endl;
     }
 }
-
-
-
 
 
 class Graph {
@@ -233,8 +207,6 @@ public:
     bool* nodeSign;
     new_node_info_t* oldToNew;
     bool* saturated;
-    struct node_sorter * indegreeArr;
-    struct node_sorter * outdegreeArr;
     
     Graph() {
         color = new char[V];
@@ -242,103 +214,23 @@ public:
         nodeSign = new bool[V];
         oldToNew = new new_node_info_t[V];
         saturated = new bool[V];
-        indegreeArr = new struct node_sorter[V];
-        outdegreeArr = new struct node_sorter[V];
-        global_indegree = new int[V];
-        global_outdegree = new int[V];
-        global_plusindegree = new int[V];
-        global_plusoutdegree = new int[V];
-        
         for (int i = 0; i < V; i++) {
             oldToNew[i].serial = -1;
             saturated[i] = false;
-            indegreeArr[i].sortkey = 0;
-            indegreeArr[i].node = i;
-            global_indegree[i] = 0;
-            global_outdegree[i] = 0;
-            global_plusindegree[i] = 0;
-            global_plusoutdegree[i] = 0;
         }
     }
-    
-    void indegreePopulate(){
-        //printBCALMGraph(adjList);
-        int x = 0;
-        for(vector<edge_t> elist: adjList){
-            for(edge_t e: elist){
-                global_indegree[e.toNode] += 1;
-                indegreeArr[e.toNode].sortkey = indegreeArr[e.toNode].sortkey + 1;
-                if(e.right == true){
-                    global_plusindegree[e.toNode] += 1;
-                }
-                if(e.left == true){
-                    global_plusoutdegree[x] += 1;
-                }
-                
-            }
-            global_outdegree[x] = elist.size();
-            x++;
-        }
-        
-        
-        vector<struct node_sorter> myvector (indegreeArr, indegreeArr+V);
-        sort (myvector.begin(), myvector.end(), sort_by_key);
-        copy(myvector.begin(), myvector.end(), indegreeArr);
-        
-        for(int i = 0; i<V; i++){
-            int minusindegree = (global_indegree[i] - global_plusindegree[i] );
-            int minusoutdegree = (global_outdegree[i] - global_plusoutdegree[i] );
-            
-            if(global_plusindegree[i] != 0 && global_plusoutdegree[i] == 0){
-                sink_count++;
-            }else if(minusindegree != 0 && minusoutdegree == 0){
-                sink_count++;
-            }
-            
-            if(global_plusindegree[i] == 0 && global_plusoutdegree[i] != 0){
-                source_count++;
-            }else if(minusindegree == 0 && minusoutdegree != 0){
-                source_count++;
-            }
-            
-            
-            global_outdegree[i] += global_indegree[i];
-            if(global_indegree[i] == 0){
-                isolated_node_count++;
-            }
-            if(global_indegree[i] == 1){
-                onecount++;
-            }
-        }
-        
-        
-//        for(int i =0;i<V; i++){
-//            vector<edge_t> adjx = adjList.at(i);
-//            sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
-//                 {
-//                     return global_plusindegree[lhs.toNode]<global_plusindegree[rhs.toNode];
-//                 });
-//
-//        }
-    }
-    
     
     void DFS_visit(int u) {
         stack<edge_t> s;
+        
         edge_t uEdge;
         uEdge.toNode = u;
         s.push(uEdge);
         
         while (!s.empty()) {
             edge_t xEdge = s.top();
-            
-            
-            
             int x = xEdge.toNode;
             s.pop();
-            
-            
-            
             
             if (color[x] == 'w') {
                 //Original DFS code
@@ -347,40 +239,6 @@ public:
                 s.push(xEdge);
                 vector<edge_t> adjx = adjList.at(x);
                 
-                if(INDEGREE_DFS){
-                    if(p[x] == -1){
-                        sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
-                             {
-                                 return global_indegree[lhs.toNode]<global_indegree[rhs.toNode];
-                             });
-                    }else if(nodeSign[x] == false){
-                        sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
-                             {
-                                 return global_indegree[lhs.toNode] -  global_plusindegree[lhs.toNode] <  global_indegree[rhs.toNode] - global_plusindegree[rhs.toNode];
-                             });
-                    }else if(nodeSign[x] == true){
-                        sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
-                             {
-                                 return global_plusindegree[lhs.toNode]<global_plusindegree[rhs.toNode];
-                             });
-                    }
-                    
-                }
-                
-                
-                
-                
-                //                if(INDEGREE_DFS==true){
-                //
-                //                    //sort (adjx.begin(), adjx.end(), indegree_edge_comp);
-                //                    sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
-                //                    {
-                //                       return global_indegree[lhs.toNode].indegree<global_indegree[rhs.toNode].indegree;
-                //                    });
-                //
-                //                }
-                
-                
                 // Now our branching code ::
                 
                 // For a white x
@@ -388,14 +246,7 @@ public:
                 // Case 1. p[x] = -1, it can happen in two way, x is the first one ever in this connected component, or no one wanted to take x
                 // either way, if p[x] = -1, i can be representative of a new node in new graph
                 // Case 2. p[x] != -1, so x won't be the representative/head of a newHome. x just gets added to its parent's newHome.
-                if(x == 3184484){
-                    cout<<"Point 0"<<endl;
-                }
                 int u = unitigs.at(x).ln; //unitig length
-                if(x == 3184484 ){
-                    cout<<"Point 0.5"<<endl;
-                }
-                
                 if (p[x] == -1) {
                     
                     list<int> xxx;
@@ -403,19 +254,14 @@ public:
                     newToOld.push_back(xxx);
                     oldToNew[x].serial = countNewNode++; // countNewNode starts at 0, then keeps increasing
                     
-                    //make the sequence
-                    //NOT CORRECT? I am not sure
-                    if(nodeSign[x]==false){
-                        newSequences[oldToNew[x].serial] = reverseComplement(unitigs.at(x).sequence);
-                    }else{
-                        newSequences[oldToNew[x].serial] = (unitigs.at(x).sequence);
-                    }
-                    
-                    
                     oldToNew[x].startPos = 1;
                     if (u <= K) {
                         oldToNew[x].endPos = 1; // do we actually see this? yes
-                        //cout<< "u<=k???"<<endl;
+                        
+                        if(DEBUGFLAG == UKDEBUG){
+                            cout<< "node: "<< x<<"u<=k *****"<<endl;
+                        }
+                        
                     } else {
                         oldToNew[x].endPos = u - K + 1;
                     }
@@ -427,46 +273,36 @@ public:
                     oldToNew[x].startPos = oldToNew[p[x]].endPos + 1;
                     if (u <= K) {
                         oldToNew[x].endPos = oldToNew[x].startPos + 1; // do we actually see this? yes
-                        //cout<< "u<=k???"<<endl;
+                        
+                        if(DEBUGFLAG == UKDEBUG){
+                            cout<< "node: "<< x<<"u<=k *****"<<endl;
+                        }
+                        
                     } else {
                         oldToNew[x].endPos = u - K + (oldToNew[x].startPos); //check correctness
                     }
                     
-                    ////if(false){
-                    // x says: Now that I know where my newHome is: I can extend my parent's sequence
-                    // Is it more complicated than this?
-                    string parentSeq = newSequences[oldToNew[x].serial];
-                    string childSeq = unitigs.at(x).sequence;
-                    
-                    // Is it CORRECT? just for testing now
-                    if(nodeSign[x]==false){
-                        childSeq = reverseComplement(childSeq);
-                    }
-                    newSequences[oldToNew[x].serial] = plus_strings(parentSeq, childSeq, K);
-                    ////}
-                }
-                
-                if(x == 3184484){
-                    cout<<"Point 1"<<endl;
                 }
                 
                 // x->y is the edge, x is the parent we are extending
                 for (edge_t yEdge : adjx) { //edge_t yEdge = adjx.at(i);
                     int y = yEdge.toNode;
                     
-                    
+                    if (DEBUGFLAG == DFSDEBUG) {
+                        cout << "Edge " << x << "->" << y << endl;
+                    }
                     
                     //Normal DFS
                     if (color[y] == 'w') {
                         s.push(yEdge);
                     }
                     
+                    if(DEBUGFLAG == PARTICULAR){
                         // DEBUGGING a particular edge
-                        if (y == 302053 && x == 3184484) {
-                            cout << "Saturated? " << saturated[x] << endl;
+                        if (y == 2 && x == 0) {
+                            cout << "Edge "<< x << "->" << y<< "reached this point."<< endl;
                         }
-                   
-                    
+                    }
                     
                     //handle self-loop, self-loop will always be an extra edge
                     if (y == x) {
@@ -501,23 +337,12 @@ public:
                                 p[y] = x;
                                 saturated[x] = true; //found a child
                                 
-                                
-                                //TESTED NOT YET
-                                //                                if (nodeSign[y] == false) {
-                                //                                    unitigs.at(y).sequence = reverseComplement(unitigs.at(y).sequence);
-                                //                                }
-                                
-                                //Yes.
+   
                             } else if (nodeSign[x] == yEdge.left) {
                                 // case 2: child (=y) has grandparent, i.e. x's parent exists
                                 nodeSign[y] = yEdge.right;
                                 p[y] = x;
                                 saturated[x] = true; //found a child
-                                
-                                //TESTED NOT YET
-                                //                                if (nodeSign[y] == false) {
-                                //                                    unitigs.at(y).sequence = reverseComplement(unitigs.at(y).sequence);
-                                //                                }
                                 
                             } else {
                                 // do we reach this case?
@@ -534,17 +359,7 @@ public:
                                 e.fromNode = x;
                                 resolveLaterEdges.push_back(e);
                                 
-                                    // DEBUGGING a particular edge
-                                    if (y == 302053 && x == 3184484) {
-                                        cout << "Saturated part 2? " << saturated[x] << endl;
-                                    }
-                                
                             } else {
-                               
-                                    // DEBUGGING a particular edge
-                                    if (y == 302053 && x == 3184484) {
-                                        cout << "Saturated part 3? " << saturated[x] << endl;
-                                    }
                                 
                             }
                             
@@ -561,49 +376,15 @@ public:
         }
     }
     
-    void DFS_visit_for_seq(int i){
-        
-    }
-    
     void DFS() {
-        if (INDEGREE_DFS == true){
-            
-            
-            indegreePopulate();
-            //global_indegree = indegree;
-            
-            for (int i = 0; i < V; i++) {
-                indegreeArr[i].node = i;
-                indegreeArr[i].sortkey = global_plusindegree[i];
-            }
-            
-            
-            vector<struct node_sorter> myvector (indegreeArr, indegreeArr+V);
-            sort (myvector.begin(), myvector.end(), sort_by_key);
-            copy(myvector.begin(), myvector.end(), indegreeArr);
-            
-            
-            
-            
-            
-        }
-        
         
         for (int i = 0; i < V; i++) {
             color[i] = 'w';
             p[i] = -1;
         }
         
-        for (int j = 0; j < V; j++) {
-            int i;
-            if(INDEGREE_DFS){
-                i = indegreeArr[j].node;
-            }else{
-                i = j;
-            }
+        for (int i = 0; i < V; i++) {
             if (color[i] == 'w') {
-                
-                
                 DFS_visit(i);
             }
         }
@@ -654,7 +435,10 @@ public:
             
             newAdjList[oldToNew[x].serial].push_back(newEdge);
             
-            
+            if(DEBUGFLAG > 0){
+                cout << "old: " << x << "->" << e.edge.toNode << ", new:" << " (" << oldToNew[x].serial << "->" << newEdge.edge.toNode << ")" << endl;
+                
+            }
         }
     }
     
@@ -665,8 +449,6 @@ public:
         delete [] nodeSign;
         delete [] oldToNew;
         delete [] saturated;
-        delete [] indegreeArr;
-        delete [] global_indegree;
     }
 };
 
@@ -779,7 +561,6 @@ int get_data(const string& unitigFileName,
         vector<edge_t> edges;
         while (getline(ss, line, ' ')) {
             if (delSpaces(line).length() != 0) {
-              
                 sscanf(line.c_str(), "%*2c %c %*c %d  %*c  %c", &c1, &nodeNum, &c2); //L:-:0:-
                 edge_t newEdge;
                 
@@ -791,7 +572,6 @@ int get_data(const string& unitigFileName,
             
         }
         adjList.push_back(edges);
-        
         
         
         doCont = false;
@@ -812,25 +592,6 @@ int get_data(const string& unitigFileName,
 }
 
 int main(int argc, char** argv) {
-    
-    string line;
-    ifstream afile ("input.txt");
-    if (afile.is_open())
-    {
-        getline (afile, UNITIG_FILE);
-        getline (afile, line);
-        K = stoi(line);
-        afile.close();
-    }
-    
-//        K = 31;
-//        UNITIG_FILE = "/Users/Sherlock/cse566_2/exclude/staph31/list_reads.unitigs.fa";
-    K = 55;
-    UNITIG_FILE = "/Volumes/FAT32/rhodo55.1/list_reads.unitigs.fa";
-    
-    
-    
-    
     uint64_t char_count;
     uchar *data = NULL;
     
@@ -841,20 +602,29 @@ int main(int argc, char** argv) {
     if (EXIT_FAILURE == get_data(UNITIG_FILE, data, unitigs, char_count)) {
         return EXIT_FAILURE;
     }
-    cout<<K<<endl;
-    //printBCALMGraph(adjList);
     
     double TIME_READ_SEC = readTimer() - startTime;
     
     Graph G;
     G.DFS();
     
+    if(DEBUGFLAG == PRINTER){
+        printBCALMGraph(adjList);
+        printNewGraph(G);
+    }
     
     
-    
+    if(DEBUGFLAG == NEWOLDMAP){
+        for(int i = 0; i< G.countNewNode; i++){
+            cout<<"new ->" <<i<<" ";
+            for(int x: newToOld[i]){
+                cout<<x<<" ";
+            }
+            cout<<endl;
+        }
+    }
     
     //fix sequences
-    if(false){
     for(int i = 0; i< G.countNewNode; i++){
         string s = "";
         for(int x: newToOld[i]){
@@ -865,8 +635,6 @@ int main(int argc, char** argv) {
             }
         }
         newSequences[i] = s;
-        //cout<<endl;
-    }
     }
     
     
@@ -884,34 +652,19 @@ int main(int argc, char** argv) {
     
     int C = 0;
     int C_new = 0;
-//    for (unitig_struct_t unitig : unitigs) {
-//        C += unitig.ln;
-//    }
+    for (unitig_struct_t unitig : unitigs) {
+        C += unitig.ln;
+    }
     
     
-    /** --DEBUG: PRINT THE LENGTHS **/
-    //    if (DEBUG > 1) {
-    //        int pp = 0;
-    //        for (string s : newSequences) {
-    //            C_new += s.length();
-    //            cout << pp++ << " -> Length = " << s.length() << endl;
-    //        }
-    //    }
     
     
-//    map<int, string>::iterator it;
-//    for (it = newSequences.begin(); it != newSequences.end(); it++)
-//    {
-//        C_new += (it->second).length();
-//    }
-//
-//
+    map<int, string>::iterator it;
+    for (it = newSequences.begin(); it != newSequences.end(); it++)
+    {
+        C_new += (it->second).length();
+    }
     
-    //    for (int i = 0; i < newSequences.size(); i++) {
-    //
-    //        cout << i << " " << newSequences.at(i) << endl;
-    //        //cout<<i<<" "<<newSequences.at(i).length()<<endl;
-    //    }
     
     
     double TIME_TOTAL_SEC = readTimer() - startTime;
@@ -949,8 +702,7 @@ int main(int argc, char** argv) {
     //    cout << "Space before: " << spaceBefore << " bytes." << endl;
     //    cout << "Percent saved: " << ((save - overhead)*1.0 / spaceBefore) * 100.0 << "%" << endl;
     formattedOutput(G);
-    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count);
-    
+    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %f \t %f\n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, K, TIME_READ_SEC, TIME_TOTAL_SEC);
     //printGraph(adjList);
     //printAllSequences(unitigs);
     return EXIT_SUCCESS;
