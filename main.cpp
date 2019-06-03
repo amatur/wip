@@ -1,6 +1,5 @@
-// --- VERSION 1.7 ----
-// Bug fixed and validated
-// input format input.txt
+// --- VERSION 2.0 ----
+// isolated node input fixed, upperbound fixed
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -18,18 +17,18 @@
 #include <unordered_map>
 using namespace std;
 
-int K = 31;
-string UNITIG_FILE = "/Volumes/FAT32/chol31/list_reads.unitigs.fa";
-//        K = 31;
-//        UNITIG_FILE = "/Users/Sherlock/cse566_2/exclude/staph31/list_reads.unitigs.fa";
-//    K = 11;
-//    UNITIG_FILE = "/Users/Sherlock/cse566_2/data/list_reads.unitigs.fa";
+//int K = 55;
+//string UNITIG_FILE = "/Volumes/FAT32/hum55/list_reads.unitigs.fa";
+//   int     K = 31;
+//   string    UNITIG_FILE = "/Users/Sherlock/cse566_2/exclude/staph31/list_reads.unitigs.fa";
+int K = 45;
+string UNITIG_FILE = "list_reads.unitigs.fa";
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
 
 enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5};
 
-DEBUGFLAG_T DBGFLAG = UKDEBUG;
+DEBUGFLAG_T DBGFLAG = NONE;
 ALGOMODE_T ALGOMODE = OUTDEGREE_DFS;
 
 string mapmode[] = {"random", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs"
@@ -223,8 +222,8 @@ void printAllBCALMSequences(vector<unitig_struct_t> unitigs) {
 class Graph {
 public:
     int V = adjList.size();
-    int countNewNode;
-    int time;
+    int countNewNode = 0;
+    int time = 0;
     
     char* color;
     int* p;
@@ -259,21 +258,24 @@ public:
     }
     
     void indegreePopulate(){
-        int x = 0;
+        int xc = 0;
         for(vector<edge_t> elist: adjList){
             for(edge_t e: elist){
+                
                 global_indegree[e.toNode] += 1;
                 indegree[e.toNode].sortkey = indegree[e.toNode].sortkey + 1;
                 if(e.right == true){
                     global_plusindegree[e.toNode] += 1;
                 }
                 if(e.left == true){
-                    global_plusoutdegree[x] += 1;
+                    global_plusoutdegree[xc] += 1;
                 }
                 
             }
-            global_outdegree[x] = elist.size();
-            x++;
+            global_outdegree[xc] = elist.size();
+            
+            
+            xc++;
         }
         
         for(int i = 0; i<V; i++){
@@ -283,42 +285,15 @@ public:
             if(DBGFLAG == SINKSOURCE){
                 cout<<i<<"is ";
             }
-//            if(global_plusindegree[i] != 0 && global_plusoutdegree[i] == 0){
-//                sink_count++;
-//                cout<<"sink, ";
-//            }else if(minusindegree != 0 && minusoutdegree == 0){
-//                sink_count++;
-//                cout<<"sink, ";
-//            }
-//
-//            if(global_plusindegree[i] == 0 && global_plusoutdegree[i] != 0){
-//                source_count++;
-//                cout<<"source, ";
-//            }else if(minusindegree == 0 && minusoutdegree != 0){
-//                source_count++;
-//                cout<<"source, ";
-//            }
             
-            
-            if(global_plusoutdegree[i] == 0){
+            if(minusoutdegree == 0 && minusindegree != 0){
                 sink_count++;
                 if(DBGFLAG == SINKSOURCE){
                     cout<<"sink, ";
                 }
                 
-            }else if(minusoutdegree == 0){
-                sink_count++;
-                if(DBGFLAG == SINKSOURCE){
-                    cout<<"sink, ";
-                }
             }
-            
-            if(global_plusindegree[i] == 0){
-                source_count++;
-                if(DBGFLAG == SINKSOURCE){
-                    cout<<"source, ";
-                }
-            }else if(minusindegree == 0){
+            if(minusindegree == 0 && minusoutdegree != 0){
                 source_count++;
                 if(DBGFLAG == SINKSOURCE){
                     cout<<"source, ";
@@ -326,7 +301,22 @@ public:
             }
             
             
-            global_outdegree[i] += global_indegree[i];
+//            if(global_plusoutdegree[i] == 0 && global_plusindegree[i] != 0){
+//                sink_count++;
+//                if(DBGFLAG == SINKSOURCE){
+//                    cout<<"sink, ";
+//                }
+//
+//            }
+//            if(global_plusindegree[i] == 0 && global_plusoutdegree[i] != 0){
+//                source_count++;
+//                if(DBGFLAG == SINKSOURCE){
+//                    cout<<"source, ";
+//                }
+//            }
+//
+            
+            //global_outdegree[i] += global_indegree[i];
             if(global_indegree[i] == 0){
                 isolated_node_count++;
                 if(DBGFLAG == SINKSOURCE){
@@ -581,6 +571,7 @@ public:
     
     void DFS() {
         indegreePopulate();
+        
         if (ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1 ){
             for (int i = 0; i < V; i++) {
                 indegree[i].node = i;
@@ -790,8 +781,12 @@ int get_data(const string& unitigFileName,
     
     do {
         unitig_struct_t unitig_struct;
-        
+        edgesline[0] = '\0';
         sscanf(line.c_str(), "%*c %d %s  %s  %s %[^\n]s", &unitig_struct.serial, lnline, kcline, kmline, edgesline);
+//        if(unitig_struct.serial == 1241914){
+//            cout<<line<<endl;
+//            cout<<edgesline<<endl;
+//        }
         //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
         
         sscanf(lnline, "%*5c %d", &unitig_struct.ln);
@@ -807,6 +802,9 @@ int get_data(const string& unitigFileName,
                 if(DBGFLAG==VERIFYINPUT){
                     cout<<line<<endl;
                 }
+//                if(unitig_struct.serial == 1241914){
+//                    cout<<line<<endl;
+//                }
                 sscanf(line.c_str(), "%*2c %c %*c %d  %*c  %c", &c1, &nodeNum, &c2); //L:-:0:-
                 edge_t newEdge;
                 
@@ -862,7 +860,6 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
     cout<<K<<endl;
-    //printBCALMGraph(adjList);
     
     double TIME_READ_SEC = readTimer() - startTime;
     
@@ -953,7 +950,7 @@ int main(int argc, char** argv) {
     int save = (C - C_new) * ACGT_DTYPE_SIZE + (E - E_new)*(NODENUM_DTYPE_SIZE + SIGN_DTYPE_SIZE);
     int overhead = (E_new)*(2 * EDGE_INT_DTYPE_SIZE);
     float persaved = ((save - overhead)*1.0 / spaceBefore) * 100.0;
-    float upperbound = (1-((C-(K-1)*(G.V - max(sink_count, source_count)*1.0))/C))*100.0;
+    float upperbound = (1-((C-(K-1)*(G.V - max(sink_count + isolated_node_count, source_count + isolated_node_count)*1.0))/C))*100.0;
     float saved_c = (1-(C_new*1.0/C))*100.0;
     
     formattedOutput(G);
