@@ -1,13 +1,11 @@
 // --- VERSION 1.7 ----
 // Bug fixed and validated
 // input format input.txt
-
-#include<cmath>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <vector>
 #include <assert.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <unordered_set>
 #include <map>
@@ -19,6 +17,25 @@
 #include <stack>
 #include <unordered_map>
 using namespace std;
+
+int K = 31;
+string UNITIG_FILE = "/Volumes/FAT32/chol31/list_reads.unitigs.fa";
+//        K = 31;
+//        UNITIG_FILE = "/Users/Sherlock/cse566_2/exclude/staph31/list_reads.unitigs.fa";
+//    K = 11;
+//    UNITIG_FILE = "/Users/Sherlock/cse566_2/data/list_reads.unitigs.fa";
+
+enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
+
+enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5};
+
+DEBUGFLAG_T DBGFLAG = UKDEBUG;
+ALGOMODE_T ALGOMODE = OUTDEGREE_DFS;
+
+string mapmode[] = {"random", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs"
+};
+
+
 
 typedef unsigned char uchar;
 
@@ -54,11 +71,6 @@ typedef struct {
     int kmerEndIndex;
 } newEdge_t;
 
-
-enum DEBUGGFLAG { NONE = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12 };
-DEBUGGFLAG DEBUGG = NONE;
-//int DEBUGG = 10;
-bool INDEGREE_DFS = true;
 int isolated_node_count = 0;
 int sink_count = 0;
 int source_count = 0;
@@ -68,39 +80,24 @@ int onecount = 0;
 struct node_sorter {
     int node;
     int sortkey;
-    //bool operator() (node_indegree i, node_indegree j) { return (i<j);}
+    //bool operator() (struct node_sorter  i, struct node_sorter  j) { return (i.sortkey<j.sortkey);}
 };
-
 bool sort_by_key (struct node_sorter i, struct node_sorter j) { return (i.sortkey<j.sortkey); }
 
-//struct node_indegree* global_indegree;
 int* global_indegree;
 int* global_outdegree;
 int* global_plusindegree;
 int* global_plusoutdegree;
-struct node_sorter * indegree;
-
-
-
-// ------- PARAMETERS -------- //
-//int K = 11;
-//string UNITIG_FILE = "data/list_reads.unitigs.fa";
-
-int K;
-string UNITIG_FILE;
 
 
 vector<vector<edge_t> > adjList;
 vector<vector<edge_t> > reverseAdjList;
-
 vector<vector<newEdge_t> > newAdjList;
 vector<edge_both_t> resolveLaterEdges;
 vector<unitig_struct_t> unitigs;
-//vector<string> newSequences;
 map<int, string> newSequences;
-
-
 vector<list<int> > newToOld;
+
 
 inline string plus_strings(const string& a, const string& b, size_t kmersize) {
     if (a == "") return b;
@@ -244,7 +241,6 @@ public:
         oldToNew = new new_node_info_t[V];
         saturated = new bool[V];
         indegree = new struct node_sorter[V];
-        outdegree = new struct node_sorter[V];
         global_indegree = new int[V];
         global_outdegree = new int[V];
         global_plusindegree = new int[V];
@@ -284,7 +280,7 @@ public:
             int minusindegree = (global_indegree[i] - global_plusindegree[i] );
             int minusoutdegree = (global_outdegree[i] - global_plusoutdegree[i] );
             
-            if(DEBUGG == SINKSOURCE){
+            if(DBGFLAG == SINKSOURCE){
                 cout<<i<<"is ";
             }
 //            if(global_plusindegree[i] != 0 && global_plusoutdegree[i] == 0){
@@ -306,25 +302,25 @@ public:
             
             if(global_plusoutdegree[i] == 0){
                 sink_count++;
-                if(DEBUGG == SINKSOURCE){
+                if(DBGFLAG == SINKSOURCE){
                     cout<<"sink, ";
                 }
                 
             }else if(minusoutdegree == 0){
                 sink_count++;
-                if(DEBUGG == SINKSOURCE){
+                if(DBGFLAG == SINKSOURCE){
                     cout<<"sink, ";
                 }
             }
             
             if(global_plusindegree[i] == 0){
                 source_count++;
-                if(DEBUGG == SINKSOURCE){
+                if(DBGFLAG == SINKSOURCE){
                     cout<<"source, ";
                 }
             }else if(minusindegree == 0){
                 source_count++;
-                if(DEBUGG == SINKSOURCE){
+                if(DBGFLAG == SINKSOURCE){
                     cout<<"source, ";
                 }
             }
@@ -333,7 +329,7 @@ public:
             global_outdegree[i] += global_indegree[i];
             if(global_indegree[i] == 0){
                 isolated_node_count++;
-                if(DEBUGG == SINKSOURCE){
+                if(DBGFLAG == SINKSOURCE){
                     cout<<"isolated, ";
                 }
             }
@@ -341,7 +337,7 @@ public:
                 onecount++;
             }
             
-            if(DEBUGG == SINKSOURCE){
+            if(DBGFLAG == SINKSOURCE){
                 cout<<endl;
             }
             
@@ -373,15 +369,37 @@ public:
                 s.push(xEdge);
                 vector<edge_t> adjx = adjList.at(x);
                 
-                //                if(INDEGREE_DFS==true){
-                //
-                //                    //sort (adjx.begin(), adjx.end(), indegree_edge_comp);
-                //                    sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
-                //                    {
-                //                       return global_indegree[lhs.toNode].indegree<global_indegree[rhs.toNode].indegree;
-                //                    });
-                //
-                //                }
+                
+                if(ALGOMODE == INDEGREE_DFS){
+                    sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
+                         {
+                             return global_indegree[lhs.toNode] < global_indegree[rhs.toNode];
+                         });
+                }
+                if(ALGOMODE == INDEGREE_DFS_INVERTED){
+                    sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
+                         {
+                             return global_indegree[lhs.toNode] > global_indegree[rhs.toNode];
+                         });
+                }
+                if (ALGOMODE == OUTDEGREE_DFS){
+                    if(p[x] == -1){
+                        sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
+                             {
+                                 return global_outdegree[lhs.toNode] < global_outdegree[rhs.toNode];
+                             });
+                    }else if (nodeSign[x] == false){
+                        sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
+                             {
+                                 return global_outdegree[lhs.toNode] - global_plusoutdegree[lhs.toNode] < global_outdegree[rhs.toNode] - global_plusoutdegree[rhs.toNode];
+                             });
+                    }else if (nodeSign[x] == true){
+                        sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
+                             {
+                                 return global_plusoutdegree[lhs.toNode] < global_plusoutdegree[rhs.toNode];
+                             });
+                    }
+                }
                 
                 
                 // Now our branching code ::
@@ -410,9 +428,11 @@ public:
                     
                     
                     oldToNew[x].startPos = 1;
-                    if (u <= K) {
+                    if (u < K) {
                         oldToNew[x].endPos = 1; // do we actually see this? yes
-                        //cout<< "u<=k???"<<endl;
+                        if(DBGFLAG == UKDEBUG){
+                            cout<< "node: "<< x<<"u< k ***** u = "<<u<<endl;
+                        }
                     } else {
                         oldToNew[x].endPos = u - K + 1;
                     }
@@ -422,9 +442,11 @@ public:
                     newToOld[oldToNew[p[x]].serial].push_back(x);
                     oldToNew[x].serial = oldToNew[p[x]].serial;
                     oldToNew[x].startPos = oldToNew[p[x]].endPos + 1;
-                    if (u <= K) {
+                    if (u < K) {
                         oldToNew[x].endPos = oldToNew[x].startPos + 1; // do we actually see this? yes
-                        //cout<< "u<=k???"<<endl;
+                        if(DBGFLAG == UKDEBUG){
+                            cout<< "node: "<< x<<"u< k ***** u = "<<u<<endl;
+                        }
                     } else {
                         oldToNew[x].endPos = u - K + (oldToNew[x].startPos); //check correctness
                     }
@@ -445,7 +467,7 @@ public:
                 for (edge_t yEdge : adjx) { //edge_t yEdge = adjx.at(i);
                     int y = yEdge.toNode;
                     
-                    if (DEBUGG == DFSDEBUGG) {
+                    if (DBGFLAG == DFSDEBUGG) {
                         cout << "Edge " << x << "->" << y << endl;
                     }
                     
@@ -454,7 +476,7 @@ public:
                         s.push(yEdge);
                     }
                     
-                    if(DEBUGG == PARTICULAR){
+                    if(DBGFLAG == PARTICULAR){
                         // DEBUGGGING a particular edge
                         if (y == 2 && x == 0) {
                             cout << "Saturated? " << saturated[x] << endl;
@@ -528,14 +550,14 @@ public:
                                 e.edge = yEdge;
                                 e.fromNode = x;
                                 resolveLaterEdges.push_back(e);
-                                if (DEBUGG == PARTICULAR) {
+                                if (DBGFLAG == PARTICULAR) {
                                     // DEBUGGGING a particular edge
                                     if (y == 2 && x == 0) {
                                         cout << "Saturated? " << saturated[x] << endl;
                                     }
                                 }
                             } else {
-                                if (DEBUGG == PARTICULAR) {
+                                if (DBGFLAG == PARTICULAR) {
                                     // DEBUGGGING a particular edge
                                     if (y == 2 && x == 0) {
                                         cout << "Saturated? " << saturated[x] << endl;
@@ -555,34 +577,35 @@ public:
             
         }
     }
-    
-    void DFS_visit_for_seq(int i){
-        
-    }
+   
     
     void DFS() {
-        if (INDEGREE_DFS == true){
-            //            for (int i = 0; i < V; i++) {
-            //                indegree[i].node = i;
-            //                indegree[i].indegree = countInArcs(i);
-            //            }
-            //
-            indegreePopulate();
-            //global_indegree = indegree;
+        indegreePopulate();
+        if (ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1 ){
+            for (int i = 0; i < V; i++) {
+                indegree[i].node = i;
+                indegree[i].sortkey = global_indegree[i];
+            }
             vector<struct node_sorter> myvector (indegree, indegree+V);
             sort (myvector.begin(), myvector.end(), sort_by_key);
             copy(myvector.begin(), myvector.end(), indegree);
             
-            
-            
-            if(DEBUGG == INDEGREEPRINT){
+            if(DBGFLAG == INDEGREEPRINT){
                 cout<<"print in degrees"<<endl;
                 for(int i = 0; i<V; i++){
                     cout<<indegree[i].node<<"->"<<indegree[i].sortkey<<endl;
                 }
-                
             }
-            
+        }
+        
+        if (ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1){
+            for (int i = 0; i < V; i++) {
+                indegree[i].node = i;
+                indegree[i].sortkey = global_outdegree[i];
+            }
+            vector<struct node_sorter> myvector (indegree, indegree+V);
+            sort (myvector.begin(), myvector.end(), sort_by_key);
+            copy(myvector.begin(), myvector.end(), indegree);
         }
         
         
@@ -593,17 +616,16 @@ public:
         
         for (int j = 0; j < V; j++) {
             int i;
-            if(INDEGREE_DFS){
+            if(ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1 || ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1){
                 i = indegree[j].node;
             }else{
                 i = j;
             }
+            
             if (color[i] == 'w') {
-                if(DEBUGG == DFSDEBUGG){
-                    cout<<"visit start "<<i<<endl;
-                    
+                if(DBGFLAG == DFSDEBUGG){
+                    cout<<"visit start of node: "<<i<<endl;
                 }
-                
                 DFS_visit(i);
             }
         }
@@ -613,9 +635,6 @@ public:
         for (int i = 0; i < V; i++) {
             color[i] = 'w';
         }
-        // make the sequences
-        
-        
         
         
         for (int i = 0; i < countNewNode; i++) {
@@ -654,7 +673,7 @@ public:
             
             newAdjList[oldToNew[x].serial].push_back(newEdge);
             
-            if(DEBUGG == OLDNEWMAP){
+            if(DBGFLAG == OLDNEWMAP){
                 cout << "old: " << x << "->" << e.edge.toNode << ", new:" << " (" << oldToNew[x].serial << "->" << newEdge.edge.toNode << ")" << endl;
                 
             }
@@ -785,7 +804,7 @@ int get_data(const string& unitigFileName,
         vector<edge_t> edges;
         while (getline(ss, line, ' ')) {
             if (delSpaces(line).length() != 0) {
-                if(DEBUGG==VERIFYINPUT){
+                if(DBGFLAG==VERIFYINPUT){
                     cout<<line<<endl;
                 }
                 sscanf(line.c_str(), "%*2c %c %*c %d  %*c  %c", &c1, &nodeNum, &c2); //L:-:0:-
@@ -821,22 +840,15 @@ int get_data(const string& unitigFileName,
 
 int main(int argc, char** argv) {
     
-    string line;
-    ifstream afile ("input.txt");
-    if (afile.is_open())
-    {
-        getline (afile, UNITIG_FILE);
-        getline (afile, line);
-        K = stoi(line);
-        afile.close();
-    }
-    
-        K = 31;
-        UNITIG_FILE = "/Users/Sherlock/cse566_2/exclude/staph31/list_reads.unitigs.fa";
-//    K = 11;
-//    UNITIG_FILE = "/Users/Sherlock/cse566_2/data/list_reads.unitigs.fa";
-    
-    
+//    string line;
+//    ifstream afile ("input.txt");
+//    if (afile.is_open())
+//    {
+//        getline (afile, UNITIG_FILE);
+//        getline (afile, line);
+//        K = stoi(line);
+//        afile.close();
+//    }
     
     
     uint64_t char_count;
@@ -858,7 +870,7 @@ int main(int argc, char** argv) {
     G.DFS();
     
     
-    if(DEBUGG == PRINTER){
+    if(DBGFLAG == PRINTER){
         printBCALMGraph(adjList);
         printNewGraph(G);
         
@@ -904,32 +916,21 @@ int main(int argc, char** argv) {
     for (unitig_struct_t unitig : unitigs) {
         C += unitig.ln;
     }
-    
-    
-    /** --DEBUGG: PRINT THE LENGTHS **/
-    //    if (DEBUGG > 1) {
-    //        int pp = 0;
-    //        for (string s : newSequences) {
-    //            C_new += s.length();
-    //            cout << pp++ << " -> Length = " << s.length() << endl;
-    //        }
-    //    }
+
     
     
     map<int, string>::iterator it;
+    int maxlen = 0;
     for (it = newSequences.begin(); it != newSequences.end(); it++)
     {
         C_new += (it->second).length();
+        if((it->second).length() >maxlen){
+            maxlen =(it->second).length();
+        }
+        
     }
     
-    
-    
-    //    for (int i = 0; i < newSequences.size(); i++) {
-    //
-    //        cout << i << " " << newSequences.at(i) << endl;
-    //        //cout<<i<<" "<<newSequences.at(i).length()<<endl;
-    //    }
-    
+
     
     double TIME_TOTAL_SEC = readTimer() - startTime;
     
@@ -955,23 +956,8 @@ int main(int argc, char** argv) {
     float upperbound = (1-((C-(K-1)*(G.V - max(sink_count, source_count)*1.0))/C))*100.0;
     float saved_c = (1-(C_new*1.0/C))*100.0;
     
-    
-    //    cout << "Time for loading the data: " << TIME_READ_SEC << " sec" << endl;
-    //    cout << "Total construction time: " << TIME_TOTAL_SEC<< " sec" << endl;
-    //    cout << "V: " << V << endl;
-    //    cout << "V_new: " << V_new << endl;
-    //    cout << "E: " << E << endl;
-    //    cout << "E_new: " << E_new << endl;
-    //    cout << "C: " << C << endl;
-    //    cout << "C_new: " << C_new << endl;
-    //    cout << "Number of Bytes required for storing one edge start or end: " << EDGE_INT_DTYPE_SIZE << endl;
-    //    cout << "Space saved: " << save - overhead << " bytes." << endl;
-    //    cout << "Space before: " << spaceBefore << " bytes." << endl;
-    //    cout << "Percent saved: " << ((save - overhead)*1.0 / spaceBefore) * 100.0 << "%" << endl;
     formattedOutput(G);
-    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.2f%% \t %.2f%% \n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c);
+    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.2f%% \t %.2f%% \t %s\n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str());
     
-    //printGraph(adjList);
-    //printAllSequences(unitigs);
     return EXIT_SUCCESS;
 }
