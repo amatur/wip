@@ -17,21 +17,21 @@
 #include <unordered_map>
 using namespace std;
 
-//int K = 55;
-//string UNITIG_FILE = "/Volumes/FAT32/hum55/list_reads.unitigs.fa";
+int K = 31;
+string UNITIG_FILE = "/Volumes/FAT32/chol31/list_reads.unitigs.fa";
 //   int     K = 31;
 //   string    UNITIG_FILE = "/Users/Sherlock/cse566_2/exclude/staph31/list_reads.unitigs.fa";
-int K = 45;
-string UNITIG_FILE = "list_reads.unitigs.fa";
+//int K = 45;
+//string UNITIG_FILE = "list_reads.unitigs.fa";
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
 
-enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5};
+enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6};
 
 DEBUGFLAG_T DBGFLAG = NONE;
-ALGOMODE_T ALGOMODE = OUTDEGREE_DFS;
+ALGOMODE_T ALGOMODE = PLUS_INDEGREE_DFS;
 
-string mapmode[] = {"random", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs"
+string mapmode[] = {"random", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs"
 };
 
 
@@ -286,35 +286,50 @@ public:
                 cout<<i<<"is ";
             }
             
-            if(minusoutdegree == 0 && minusindegree != 0){
-                sink_count++;
-                if(DBGFLAG == SINKSOURCE){
-                    cout<<"sink, ";
-                }
-                
-            }
-            if(minusindegree == 0 && minusoutdegree != 0){
-                source_count++;
-                if(DBGFLAG == SINKSOURCE){
-                    cout<<"source, ";
-                }
-            }
-            
-            
-//            if(global_plusoutdegree[i] == 0 && global_plusindegree[i] != 0){
+//            if(minusoutdegree == 0 && minusindegree != 0){
 //                sink_count++;
 //                if(DBGFLAG == SINKSOURCE){
 //                    cout<<"sink, ";
 //                }
 //
 //            }
-//            if(global_plusindegree[i] == 0 && global_plusoutdegree[i] != 0){
+//            if(minusindegree == 0 && minusoutdegree != 0){
 //                source_count++;
 //                if(DBGFLAG == SINKSOURCE){
 //                    cout<<"source, ";
 //                }
 //            }
+            
+            
+            if(global_plusoutdegree[i] == 0 && global_plusindegree[i] != 0){
+                sink_count++;
+                if(DBGFLAG == SINKSOURCE){
+                    cout<<"sink, ";
+                }
+
+            }
+            if(global_plusindegree[i] == 0 && global_plusoutdegree[i] != 0){
+                source_count++;
+                if(DBGFLAG == SINKSOURCE){
+                    cout<<"source, ";
+                }
+            }
+
+            
+//                if(global_plusoutdegree[i] == 0){
+//                    sink_count++;
+//                    if(DBGFLAG == SINKSOURCE){
+//                        cout<<"sink, ";
+//                    }
 //
+//                }
+//                if(global_plusindegree[i] == 0){
+//                    source_count++;
+//                    if(DBGFLAG == SINKSOURCE){
+//                        cout<<"source, ";
+//                    }
+//                }
+            
             
             //global_outdegree[i] += global_indegree[i];
             if(global_indegree[i] == 0){
@@ -366,6 +381,14 @@ public:
                              return global_indegree[lhs.toNode] < global_indegree[rhs.toNode];
                          });
                 }
+                
+                if(ALGOMODE == PLUS_INDEGREE_DFS){
+                    sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
+                         {
+                             return global_indegree[lhs.toNode]  - global_plusindegree[lhs.toNode] > global_indegree[lhs.toNode]  - global_plusindegree[rhs.toNode];
+                         });
+                }
+                
                 if(ALGOMODE == INDEGREE_DFS_INVERTED){
                     sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
                          {
@@ -954,7 +977,7 @@ int main(int argc, char** argv) {
     float saved_c = (1-(C_new*1.0/C))*100.0;
     
     formattedOutput(G);
-    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.2f%% \t %.2f%% \t %s\n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str());
+    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.6f%% \t %.6f%% \t %s\n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str());
     
     return EXIT_SUCCESS;
 }
