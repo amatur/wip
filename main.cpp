@@ -22,8 +22,14 @@ using namespace std;
 //int K = 11;
 //string UNITIG_FILE = "/Volumes/FAT32/data2019/phi11/list_reads.unitigs.fa";
 
-int K = 55;
+int K = 31;
 string UNITIG_FILE = "list_reads.unitigs.fa";
+
+//~ int K = 31;
+//~ string UNITIG_FILE = "/media/FAT32/data2019/staph31/list_reads.unitigs.fa";
+
+//~ int K = 45;
+//~ string UNITIG_FILE = "/media/FAT32/data2019/hum45/list_reads.unitigs.fa";
 
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
@@ -268,39 +274,39 @@ public:
     }
     
     void indegreePopulate(){
-        vector<int> selflooper;
-        vector<int> selflooper_pos;
+        //~ vector<int> selflooper;
+        //~ vector<int> selflooper_pos;
         
-        int xc = 0;
-        for(vector<edge_t> elist: adjList){
-            int pos = 0;
-            for(edge_t e: elist){
+        //~ int xc = 0;
+        //~ for(vector<edge_t> elist: adjList){
+            //~ int pos = 0;
+            //~ for(edge_t e: elist){
                 
-                if(e.toNode == xc){
-                    global_selfloop[xc] = true;
-                    cout<<"self-loop: "<<boolToCharSign(e.left)<<" "<<xc<<" "<<boolToCharSign(e.right)<<endl;
-                    selflooper.push_back(xc);
-                    selflooper_pos.push_back(pos);
-                }
-                pos++;
+                //~ if(e.toNode == xc){
+                    //~ global_selfloop[xc] = true;
+                    //~ cout<<"self-loop: "<<boolToCharSign(e.left)<<" "<<xc<<" "<<boolToCharSign(e.right)<<endl;
+                    //~ selflooper.push_back(xc);
+                    //~ selflooper_pos.push_back(pos);
+                //~ }
+                //~ pos++;
                 
-            }
-            xc++;
-        }
+            //~ }
+            //~ xc++;
+        //~ }
         //cout<<"idnegree: "<<global_indegree[12]<<" "<<"outdegree: "<<global_outdegree[12]<<endl;
         
         
         // REMOVE ALL SELF-LOOPS
         
-        for(int i = 0; i<selflooper.size(); i++){
-            cout<<"before size"<<" "<<selflooper[i]<<":"<<adjList[selflooper[i]].size()<<endl;
-            adjList[selflooper[i]].erase(adjList[selflooper[i]].begin()+selflooper_pos[i]);
-            cout<<"after size"<<" "<<selflooper[i]<<":"<<adjList[selflooper[i]].size()<<endl;
-        }
-        cout<<"All self-loops removed."<<endl;
+//        for(int i = 0; i<selflooper.size(); i++){
+//            cout<<"before size"<<" "<<selflooper[i]<<":"<<adjList[selflooper[i]].size()<<endl;
+//            adjList[selflooper[i]].erase(adjList[selflooper[i]].begin()+selflooper_pos[i]);
+//            cout<<"after size"<<" "<<selflooper[i]<<":"<<adjList[selflooper[i]].size()<<endl;
+//        }
+//        cout<<"All self-loops removed."<<endl;
         
         
-        xc = 0;
+        int xc = 0;
         for(vector<edge_t> elist: adjList){
             for(edge_t e: elist){
                 global_indegree[e.toNode] += 1;
