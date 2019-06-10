@@ -1,5 +1,4 @@
-// --- VERSION 2.0 ----
-// isolated node input fixed, upperbound fixed
+// --- VERSION 3.0 ----
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -17,21 +16,22 @@
 #include <unordered_map>
 using namespace std;
 
+
+//int K = 11;
+//string UNITIG_FILE = "/Volumes/FAT32/data2019/phi11/list_reads.unitigs.fa";
+
 int K = 31;
-string UNITIG_FILE = "/Volumes/FAT32/chol31/list_reads.unitigs.fa";
-//   int     K = 31;
-//   string    UNITIG_FILE = "/Users/Sherlock/cse566_2/exclude/staph31/list_reads.unitigs.fa";
-//int K = 45;
-//string UNITIG_FILE = "list_reads.unitigs.fa";
+string UNITIG_FILE = "/Volumes/FAT32/data2019/chol31/list_reads.unitigs.fa";
+
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
 
-enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6};
+enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6, RANDOM_DFS = 7, NODEASSIGN = 8};
 
 DEBUGFLAG_T DBGFLAG = NONE;
-ALGOMODE_T ALGOMODE = PLUS_INDEGREE_DFS;
+ALGOMODE_T ALGOMODE = INDEGREE_DFS_INVERTED;
 
-string mapmode[] = {"random", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs"
+string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign"
 };
 
 
@@ -73,6 +73,7 @@ typedef struct {
 int isolated_node_count = 0;
 int sink_count = 0;
 int source_count = 0;
+int sharedparent_count = 0;
 int onecount = 0;
 
 
@@ -82,11 +83,14 @@ struct node_sorter {
     //bool operator() (struct node_sorter  i, struct node_sorter  j) { return (i.sortkey<j.sortkey);}
 };
 bool sort_by_key (struct node_sorter i, struct node_sorter j) { return (i.sortkey<j.sortkey); }
+bool sort_by_key_inverted (struct node_sorter i, struct node_sorter j) { return (i.sortkey>j.sortkey); }
 
 int* global_indegree;
 int* global_outdegree;
 int* global_plusindegree;
 int* global_plusoutdegree;
+bool* global_selfloop;
+bool* global_issinksource;
 
 
 vector<vector<edge_t> > adjList;
@@ -244,6 +248,8 @@ public:
         global_outdegree = new int[V];
         global_plusindegree = new int[V];
         global_plusoutdegree = new int[V];
+        global_selfloop = new bool[V];
+        global_issinksource = new bool[V];
         
         for (int i = 0; i < V; i++) {
             oldToNew[i].serial = -1;
@@ -254,14 +260,47 @@ public:
             global_outdegree[i] = 0;
             global_plusindegree[i] = 0;
             global_plusoutdegree[i] = 0;
+            global_selfloop[i] = false;
+            global_issinksource[i] = false;
         }
     }
     
     void indegreePopulate(){
+        vector<int> selflooper;
+        vector<int> selflooper_pos;
+        
         int xc = 0;
         for(vector<edge_t> elist: adjList){
+            int pos = 0;
             for(edge_t e: elist){
                 
+                if(e.toNode == xc){
+                    global_selfloop[xc] = true;
+                    cout<<"self-loop: "<<boolToCharSign(e.left)<<" "<<xc<<" "<<boolToCharSign(e.right)<<endl;
+                    selflooper.push_back(xc);
+                    selflooper_pos.push_back(pos);
+                }
+                pos++;
+                
+            }
+            xc++;
+        }
+        //cout<<"idnegree: "<<global_indegree[12]<<" "<<"outdegree: "<<global_outdegree[12]<<endl;
+        
+        
+        // REMOVE ALL SELF-LOOPS
+        
+        for(int i = 0; i<selflooper.size(); i++){
+            cout<<"before size"<<" "<<selflooper[i]<<":"<<adjList[selflooper[i]].size()<<endl;
+            adjList[selflooper[i]].erase(adjList[selflooper[i]].begin()+selflooper_pos[i]);
+            cout<<"after size"<<" "<<selflooper[i]<<":"<<adjList[selflooper[i]].size()<<endl;
+        }
+        cout<<"All self-loops removed."<<endl;
+        
+        
+        xc = 0;
+        for(vector<edge_t> elist: adjList){
+            for(edge_t e: elist){
                 global_indegree[e.toNode] += 1;
                 indegree[e.toNode].sortkey = indegree[e.toNode].sortkey + 1;
                 if(e.right == true){
@@ -273,10 +312,10 @@ public:
                 
             }
             global_outdegree[xc] = elist.size();
-            
-            
             xc++;
         }
+        
+        
         
         for(int i = 0; i<V; i++){
             int minusindegree = (global_indegree[i] - global_plusindegree[i] );
@@ -301,8 +340,12 @@ public:
 //            }
             
             
+            
+            
             if(global_plusoutdegree[i] == 0 && global_plusindegree[i] != 0){
                 sink_count++;
+                global_issinksource[i] = true;
+                
                 if(DBGFLAG == SINKSOURCE){
                     cout<<"sink, ";
                 }
@@ -310,6 +353,8 @@ public:
             }
             if(global_plusindegree[i] == 0 && global_plusoutdegree[i] != 0){
                 source_count++;
+                global_issinksource[i] = true;
+                
                 if(DBGFLAG == SINKSOURCE){
                     cout<<"source, ";
                 }
@@ -333,7 +378,9 @@ public:
             
             //global_outdegree[i] += global_indegree[i];
             if(global_indegree[i] == 0){
+                global_issinksource[i] = true;
                 isolated_node_count++;
+                
                 if(DBGFLAG == SINKSOURCE){
                     cout<<"isolated, ";
                 }
@@ -373,7 +420,9 @@ public:
                 color[x] = 'g';
                 s.push(xEdge);
                 vector<edge_t> adjx = adjList.at(x);
-                
+                if(ALGOMODE == RANDOM_DFS){
+                    random_shuffle ( adjx.begin(), adjx.end() );
+                }
                 
                 if(ALGOMODE == INDEGREE_DFS){
                     sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
@@ -394,6 +443,10 @@ public:
                          {
                              return global_indegree[lhs.toNode] > global_indegree[rhs.toNode];
                          });
+//                    for(edge_t eeee: adjx){
+//                        cout<< global_indegree[eeee.toNode]<< " ";
+//                    }
+//                    cout<<endl;
                 }
                 if (ALGOMODE == OUTDEGREE_DFS){
                     if(p[x] == -1){
@@ -479,7 +532,7 @@ public:
                 // x->y is the edge, x is the parent we are extending
                 for (edge_t yEdge : adjx) { //edge_t yEdge = adjx.at(i);
                     int y = yEdge.toNode;
-                    
+                    // cout << "Edge " << x << "->" << y << " "<<global_indegree[y] << endl;
                     if (DBGFLAG == DFSDEBUGG) {
                         cout << "Edge " << x << "->" << y << endl;
                     }
@@ -523,9 +576,10 @@ public:
                             
                             //2 case, Does x's child have grandparent?
                             // No.
-                            if (p[x] == -1) {
+                            if (p[x] == -1 && ALGOMODE != NODEASSIGN) {
                                 // case 1: child has no grandparent
                                 // so extend path without checking any sign
+                                
                                 nodeSign[x] = yEdge.left;
                                 nodeSign[y] = yEdge.right;
                                 p[y] = x;
@@ -592,8 +646,120 @@ public:
     }
    
     
+    bool canReachSinkSource(int v, bool visited[], bool sign)
+    {
+        // Mark the current node as visited and
+        // print it
+        
+        
+        
+        
+        visited[v] = true;
+        //cout << v << " ";
+        bool reachable = false;
+        
+        if(global_plusoutdegree[v] == 0 && global_plusindegree[v] != 0){
+            //cout<<v<<"is sink.";
+            return true;//sink
+            
+        }
+        if(global_plusindegree[v] == 0 && global_plusoutdegree[v] != 0){
+             //cout<<v<<"is source.";
+            return true;//source
+        }
+        if(global_indegree[v] == 0){
+            //cout<<v<<"is isolated.";
+            return true;//isolated
+        }
+        
+        
+        // Recur for all the vertices adjacent
+        // to this vertex
+        vector<edge_t>::iterator i;
+        for (i = adjList[v].begin(); i != adjList[v].end(); ++i){
+            
+            if (!visited[(*i).toNode] && sign==(*i).left){
+                reachable = canReachSinkSource((*i).toNode, visited, (*i).right);
+                if(reachable==true){
+                    return true;
+                }
+            }
+            
+        }
+        
+
+        return reachable;
+        
+    }
+    
     void DFS() {
         indegreePopulate();
+//        bool visitedForReachable[V];
+//        for (int i = 0; i< V; i++) {
+//            visitedForReachable[i]  = false;
+//        }
+//        canReachSinkSource(int v, <#bool *visited#>)
+        
+        bool visitedForReachable[V];
+        int xc = 0;
+        for(vector<edge_t> elist: adjList){
+            int pos = 0;
+            int neighbourCount = 0;
+            for(edge_t e: elist){
+                int v = e.toNode;
+               
+                if(global_plusindegree[v] == 1 && global_plusoutdegree[v] == 1){
+                    //cout<<"11XO "<<xc<<endl;
+                    neighbourCount++;
+//                    for (int i = 0; i< V; i++) {
+//                        visitedForReachable[i]  = false;
+//                    }
+//
+//                    if( !canReachSinkSource(v,visitedForReachable, true)){
+//                        neighbourCount++;
+//                    }
+                    
+                }
+                
+            }
+            
+            if(neighbourCount>0){
+                sharedparent_count += neighbourCount - 1 ;
+                //cout<<xc<<" count of such node"<<neighbourCount<<endl;
+            }else{
+                //cout<<"DOYO "<<xc<<endl;
+            }
+            
+            xc++;
+        }
+        
+        
+        
+        if(ALGOMODE == NODEASSIGN){
+            for (int i=0; i<V; i++) {
+                nodeSign[i] = true;
+//                if(global_plusindegree[i] +  global_plusoutdegree[i] < global_outdegree[i] - global_plusoutdegree[i] + global_indegree[i] - global_plusindegree[i] ){
+                if(global_plusindegree[i]< global_indegree[i] - global_plusindegree[i]){
+                    nodeSign[i] = true;
+                }
+            }
+        }
+//        for(int i = 0; i<V; i++){
+//            cout<<global_outdegree[i] << " ";
+//        }
+//
+        
+        if(ALGOMODE == INDEGREE_DFS_INVERTED){
+            for (int i = 0; i < V; i++) {
+                indegree[i].node = i;
+                indegree[i].sortkey = global_indegree[i];
+            }
+            vector<struct node_sorter> myvector (indegree, indegree+V);
+            sort (myvector.begin(), myvector.end(), sort_by_key_inverted);
+            random_shuffle ( myvector.begin(), myvector.end() );
+            copy(myvector.begin(), myvector.end(), indegree);
+            
+        }
         
         if (ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1 ){
             for (int i = 0; i < V; i++) {
@@ -611,6 +777,20 @@ public:
                 }
             }
         }
+        
+        
+        if(ALGOMODE == RANDOM_DFS){
+            for (int i = 0; i < V; i++) {
+                indegree[i].node = i;
+                indegree[i].sortkey = global_indegree[i];
+            }
+            vector<struct node_sorter> myvector (indegree, indegree+V);
+            sort (myvector.begin(), myvector.end(), sort_by_key);
+            random_shuffle ( myvector.begin(), myvector.end() );
+            copy(myvector.begin(), myvector.end(), indegree);
+            
+        }
+        
         
         if (ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1){
             for (int i = 0; i < V; i++) {
@@ -706,6 +886,7 @@ public:
         delete [] global_outdegree;
         delete [] global_plusindegree;
         delete [] global_plusoutdegree;
+        delete [] global_selfloop;
     }
 };
 
@@ -931,10 +1112,13 @@ int main(int argc, char** argv) {
     int V = G.V;
     int V_new = G.countNewNode;
     
+    
+    int numKmers = 0;
     int C = 0;
     int C_new = 0;
     for (unitig_struct_t unitig : unitigs) {
         C += unitig.ln;
+        numKmers +=  unitig.ln - K + 1;
     }
 
     
@@ -943,6 +1127,7 @@ int main(int argc, char** argv) {
     int maxlen = 0;
     for (it = newSequences.begin(); it != newSequences.end(); it++)
     {
+        
         C_new += (it->second).length();
         if((it->second).length() >maxlen){
             maxlen =(it->second).length();
@@ -973,11 +1158,17 @@ int main(int argc, char** argv) {
     int save = (C - C_new) * ACGT_DTYPE_SIZE + (E - E_new)*(NODENUM_DTYPE_SIZE + SIGN_DTYPE_SIZE);
     int overhead = (E_new)*(2 * EDGE_INT_DTYPE_SIZE);
     float persaved = ((save - overhead)*1.0 / spaceBefore) * 100.0;
-    float upperbound = (1-((C-(K-1)*(G.V - max(sink_count + isolated_node_count, source_count + isolated_node_count)*1.0))/C))*100.0;
+    
+    int maxera =sink_count + isolated_node_count;
+    int maxerb =source_count + isolated_node_count;
+    int maxerc = sharedparent_count + isolated_node_count;
+    maxerb = max(maxerc, maxerb);
+    
+    float upperbound = (1-((C-(K-1)*(G.V - max(maxera, maxerb)*1.0))/C))*100.0;
     float saved_c = (1-(C_new*1.0/C))*100.0;
     
     formattedOutput(G);
-    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.6f%% \t %.6f%% \t %s\n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str());
+    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.6f%% \t %.6f%% \t %s \t %d \t %d\n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str(), numKmers, sharedparent_count);
     
     return EXIT_SUCCESS;
 }
