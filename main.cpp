@@ -22,8 +22,8 @@ using namespace std;
 //int K = 11;
 //string UNITIG_FILE = "/Volumes/FAT32/data2019/phi11/list_reads.unitigs.fa";
 
-int K = 31;
-string UNITIG_FILE = "/Volumes/FAT32/data2019/chol31/list_reads.unitigs.fa";
+int K = 55;
+string UNITIG_FILE = "list_reads.unitigs.fa";
 
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
