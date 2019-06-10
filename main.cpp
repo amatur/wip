@@ -1,4 +1,6 @@
-// --- VERSION 3.0 ----
+// --- VERSION 3.1 ----
+//undocumented changes
+
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -26,12 +28,12 @@ string UNITIG_FILE = "/Volumes/FAT32/data2019/chol31/list_reads.unitigs.fa";
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
 
-enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6, RANDOM_DFS = 7, NODEASSIGN = 8};
+enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6, RANDOM_DFS = 7, NODEASSIGN = 8, SOURCEFIRST = 9};
 
 DEBUGFLAG_T DBGFLAG = NONE;
-ALGOMODE_T ALGOMODE = INDEGREE_DFS_INVERTED;
+ALGOMODE_T ALGOMODE = SOURCEFIRST;
 
-string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign"
+string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first"
 };
 
 
@@ -90,7 +92,7 @@ int* global_outdegree;
 int* global_plusindegree;
 int* global_plusoutdegree;
 bool* global_selfloop;
-bool* global_issinksource;
+int* global_issinksource;
 
 
 vector<vector<edge_t> > adjList;
@@ -249,7 +251,7 @@ public:
         global_plusindegree = new int[V];
         global_plusoutdegree = new int[V];
         global_selfloop = new bool[V];
-        global_issinksource = new bool[V];
+        global_issinksource = new int[V];
         
         for (int i = 0; i < V; i++) {
             oldToNew[i].serial = -1;
@@ -261,7 +263,7 @@ public:
             global_plusindegree[i] = 0;
             global_plusoutdegree[i] = 0;
             global_selfloop[i] = false;
-            global_issinksource[i] = false;
+            global_issinksource[i] = 0;
         }
     }
     
@@ -344,7 +346,7 @@ public:
             
             if(global_plusoutdegree[i] == 0 && global_plusindegree[i] != 0){
                 sink_count++;
-                global_issinksource[i] = true;
+                global_issinksource[i] = 1;
                 
                 if(DBGFLAG == SINKSOURCE){
                     cout<<"sink, ";
@@ -353,7 +355,7 @@ public:
             }
             if(global_plusindegree[i] == 0 && global_plusoutdegree[i] != 0){
                 source_count++;
-                global_issinksource[i] = true;
+                global_issinksource[i] = 1;
                 
                 if(DBGFLAG == SINKSOURCE){
                     cout<<"source, ";
@@ -378,7 +380,7 @@ public:
             
             //global_outdegree[i] += global_indegree[i];
             if(global_indegree[i] == 0){
-                global_issinksource[i] = true;
+                global_issinksource[i] = 1;
                 isolated_node_count++;
                 
                 if(DBGFLAG == SINKSOURCE){
@@ -423,6 +425,8 @@ public:
                 if(ALGOMODE == RANDOM_DFS){
                     random_shuffle ( adjx.begin(), adjx.end() );
                 }
+                
+                
                 
                 if(ALGOMODE == INDEGREE_DFS){
                     sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
@@ -749,6 +753,17 @@ public:
 //        }
 //
         
+        if(ALGOMODE == SOURCEFIRST){
+            for (int i = 0; i < V; i++) {
+                indegree[i].node = i;
+                indegree[i].sortkey = global_issinksource[i];
+            }
+            vector<struct node_sorter> myvector (indegree, indegree+V);
+            sort (myvector.begin(), myvector.end(), sort_by_key_inverted);
+            //random_shuffle ( myvector.begin(), myvector.end() );
+            copy(myvector.begin(), myvector.end(), indegree);
+        }
+        
         if(ALGOMODE == INDEGREE_DFS_INVERTED){
             for (int i = 0; i < V; i++) {
                 indegree[i].node = i;
@@ -756,7 +771,7 @@ public:
             }
             vector<struct node_sorter> myvector (indegree, indegree+V);
             sort (myvector.begin(), myvector.end(), sort_by_key_inverted);
-            random_shuffle ( myvector.begin(), myvector.end() );
+            //random_shuffle ( myvector.begin(), myvector.end() );
             copy(myvector.begin(), myvector.end(), indegree);
             
         }
@@ -810,7 +825,7 @@ public:
         
         for (int j = 0; j < V; j++) {
             int i;
-            if(ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1 || ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1){
+            if(ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1 || ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1 || ALGOMODE == SOURCEFIRST){
                 i = indegree[j].node;
             }else{
                 i = j;
