@@ -2,6 +2,7 @@
 //undocumented changes
 
 #include <cmath>
+#include<cstring>
 #include <fstream>
 #include <iostream>
 #include <vector>
@@ -16,28 +17,21 @@
 #include <list>
 #include <stack>
 #include <unordered_map>
+#include <unistd.h>
+
 using namespace std;
 
-
+int K = 0;
+string UNITIG_FILE;
 //int K = 11;
 //string UNITIG_FILE = "/Volumes/FAT32/data2019/phi11/list_reads.unitigs.fa";
 
-int K = 31;
-string UNITIG_FILE = "list_reads.unitigs.fa";
-
-//~ int K = 31;
-//~ string UNITIG_FILE = "/media/FAT32/data2019/staph31/list_reads.unitigs.fa";
-
-//~ int K = 45;
-//~ string UNITIG_FILE = "/media/FAT32/data2019/hum45/list_reads.unitigs.fa";
-
-
-enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
+enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, NODENUMBER_DBG = 5, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
 
 enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6, RANDOM_DFS = 7, NODEASSIGN = 8, SOURCEFIRST = 9};
 
-DEBUGFLAG_T DBGFLAG = NONE;
-ALGOMODE_T ALGOMODE = SOURCEFIRST;
+DEBUGFLAG_T DBGFLAG = NODENUMBER_DBG;
+ALGOMODE_T ALGOMODE = BASIC;
 
 string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first"
 };
@@ -97,7 +91,7 @@ int* global_indegree;
 int* global_outdegree;
 int* global_plusindegree;
 int* global_plusoutdegree;
-bool* global_selfloop;
+//bool* global_selfloop;
 int* global_issinksource;
 
 
@@ -256,7 +250,7 @@ public:
         global_outdegree = new int[V];
         global_plusindegree = new int[V];
         global_plusoutdegree = new int[V];
-        global_selfloop = new bool[V];
+        //global_selfloop = new bool[V];
         global_issinksource = new int[V];
         
         for (int i = 0; i < V; i++) {
@@ -268,31 +262,31 @@ public:
             global_outdegree[i] = 0;
             global_plusindegree[i] = 0;
             global_plusoutdegree[i] = 0;
-            global_selfloop[i] = false;
+            //global_selfloop[i] = false;
             global_issinksource[i] = 0;
         }
     }
     
     void indegreePopulate(){
-        //~ vector<int> selflooper;
-        //~ vector<int> selflooper_pos;
+        //vector<int> selflooper;
+        //vector<int> selflooper_pos;
         
-        //~ int xc = 0;
-        //~ for(vector<edge_t> elist: adjList){
-            //~ int pos = 0;
-            //~ for(edge_t e: elist){
-                
-                //~ if(e.toNode == xc){
-                    //~ global_selfloop[xc] = true;
-                    //~ cout<<"self-loop: "<<boolToCharSign(e.left)<<" "<<xc<<" "<<boolToCharSign(e.right)<<endl;
-                    //~ selflooper.push_back(xc);
-                    //~ selflooper_pos.push_back(pos);
-                //~ }
-                //~ pos++;
-                
-            //~ }
-            //~ xc++;
-        //~ }
+//        int xc = 0;
+//        for(vector<edge_t> elist: adjList){
+//            int pos = 0;
+//            for(edge_t e: elist){
+//
+//                if(e.toNode == xc){
+//                    global_selfloop[xc] = true;
+//                    cout<<"self-loop: "<<boolToCharSign(e.left)<<" "<<xc<<" "<<boolToCharSign(e.right)<<endl;
+//                    selflooper.push_back(xc);
+//                    selflooper_pos.push_back(pos);
+//                }
+//                pos++;
+//
+//            }
+//            xc++;
+//        }
         //cout<<"idnegree: "<<global_indegree[12]<<" "<<"outdegree: "<<global_outdegree[12]<<endl;
         
         
@@ -710,7 +704,7 @@ public:
 //        }
 //        canReachSinkSource(int v, <#bool *visited#>)
         
-        bool visitedForReachable[V];
+        //bool visitedForReachable[V];
         int xc = 0;
         for(vector<edge_t> elist: adjList){
             int pos = 0;
@@ -838,7 +832,7 @@ public:
             }
             
             if (color[i] == 'w') {
-                if(DBGFLAG == DFSDEBUGG){
+                if(DBGFLAG == DFSDEBUGG || DBGFLAG == NODENUMBER_DBG  ){
                     cout<<"visit start of node: "<<i<<endl;
                 }
                 DFS_visit(i);
@@ -907,7 +901,7 @@ public:
         delete [] global_outdegree;
         delete [] global_plusindegree;
         delete [] global_plusoutdegree;
-        delete [] global_selfloop;
+        //delete [] global_selfloop;
     }
 };
 
@@ -937,6 +931,9 @@ void printNewGraph(Graph &G){
 }
 
 void formattedOutput(Graph &G){
+    string plainOutput = "plainOutput.fa";
+    ofstream plainfile;
+    plainfile.open(plainOutput);
     
     string stitchedUnitigs = "stitchedUnitigs.txt";
     ofstream myfile;
@@ -944,16 +941,24 @@ void formattedOutput(Graph &G){
     //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
     for (int newNodeNum = 0; newNodeNum<G.countNewNode; newNodeNum++){
         myfile << '>' << newNodeNum <<" LN:i:"<<newSequences[newNodeNum].length()<<" ";
+        plainfile << '>' << newNodeNum;
+        
         vector<newEdge_t> edges = newAdjList.at(newNodeNum);
         for(newEdge_t edge: edges){
             myfile<<"L:" << edge.kmerStartIndex << ":" << boolToCharSign(edge.edge.left) << ":" << edge.edge.toNode << ":" << boolToCharSign(edge.edge.left) <<":"<< edge.kmerEndIndex <<" ";
         }
+        plainfile<<endl;
         myfile<<endl;
+        
+        plainfile<<newSequences[newNodeNum];
         myfile<<newSequences[newNodeNum];
+        
+        plainfile<<endl;
         myfile<<endl;
     }
     //myfile << '>' << newNodeNum <<">0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:- " ;
     myfile.close();
+    plainfile.close();
     
 }
 
@@ -980,17 +985,8 @@ int get_data(const string& unitigFileName,
              uint64_t& char_count
              ) {
     ifstream unitigFile;
-    try {
-        unitigFile.open(unitigFileName);
-        //            if(unitigFile==NULL){
-        //                throw "ERROR: File does not exist!!!";
-        //            }else{
-        //                cout<<"File opened successfully."<<endl;
-        //            }
-        
-    } catch (const char* msg) {
-        cout << msg << endl;
-    }
+    unitigFile.open(unitigFileName);
+    
     
     string line;
     
@@ -1033,10 +1029,21 @@ int get_data(const string& unitigFileName,
                 sscanf(line.c_str(), "%*2c %c %*c %d  %*c  %c", &c1, &nodeNum, &c2); //L:-:0:-
                 edge_t newEdge;
                 
-                newEdge.left = charToBool(c1);
-                newEdge.right = charToBool(c2);
-                newEdge.toNode = nodeNum;
-                edges.push_back(newEdge);
+                bool DELSELFLOOP=true;
+                if(DELSELFLOOP){
+                    if((unitig_struct.serial)!= nodeNum){
+                        newEdge.left = charToBool(c1);
+                        newEdge.right = charToBool(c2);
+                        newEdge.toNode = nodeNum;
+                        edges.push_back(newEdge);
+                    }
+                }else{
+                    newEdge.left = charToBool(c1);
+                    newEdge.right = charToBool(c2);
+                    newEdge.toNode = nodeNum;
+                    edges.push_back(newEdge);
+                }
+                
             }
             
         }
@@ -1055,23 +1062,73 @@ int get_data(const string& unitigFileName,
             }
         }
     } while (doCont);
+    
+    
     unitigFile.close();
     
     cout << "Complete reading input." << endl;
+
     return EXIT_SUCCESS;
 }
 
+
 int main(int argc, char** argv) {
+    const char* nvalue = "" ;
     
-//    string line;
-//    ifstream afile ("input.txt");
-//    if (afile.is_open())
-//    {
-//        getline (afile, UNITIG_FILE);
-//        getline (afile, line);
-//        K = stoi(line);
-//        afile.close();
-//    }
+    int c ;
+    while( ( c = getopt (argc, argv, "i:k:m:d:") ) != -1 )
+    {
+        switch(c)
+        {
+            case 'i':
+                if(optarg) nvalue = optarg;
+                break;
+            case 'm':
+                if(optarg) {
+                    ALGOMODE = static_cast<ALGOMODE_T>(std::atoi(optarg));
+                }
+                break;
+            case 'd':
+                if(optarg) {
+                    DBGFLAG = static_cast<DEBUGFLAG_T>(std::atoi(optarg));
+                }
+                break;
+            case 'k':
+                if(optarg) {
+                    K = std::atoi(optarg) ;
+                    if(K<=0){
+                        fprintf(stderr, "Error: Specify a positive k value.\n");
+                        exit(EXIT_FAILURE);
+                    }
+                }else{
+                    fprintf(stderr, "Usage: %s -k <kmer size> -i <input-file-name>\n",
+                            argv[0]);
+                    exit(EXIT_FAILURE);
+                }
+                break;
+             default: /* '?' */
+                fprintf(stderr, "Usage: %s -k <kmer size> -i <input-file-name>\n",
+                        argv[0]);
+             exit(EXIT_FAILURE);
+             
+        }
+    }
+
+    if(K==0 || strcmp(nvalue, "")==0){
+        fprintf(stderr, "Usage: %s -k <kmer size> -i <input-file-name>\n",
+                argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    
+    
+    
+    UNITIG_FILE = string(nvalue);
+    
+    ifstream infile(UNITIG_FILE);
+    if(!infile.good()){
+        fprintf(stderr, "Error: File named \"%s\" cannot be opened.\n", UNITIG_FILE.c_str());
+        exit(EXIT_FAILURE);
+    }
     
     
     uint64_t char_count;
@@ -1084,11 +1141,31 @@ int main(int argc, char** argv) {
     if (EXIT_FAILURE == get_data(UNITIG_FILE, data, unitigs, char_count)) {
         return EXIT_FAILURE;
     }
-    cout<<K<<endl;
+    cout<<"K ="<<K<<endl;
     
     double TIME_READ_SEC = readTimer() - startTime;
     
     Graph G;
+    
+    //count total number of edges
+    int E = 0;
+    for (int i = 0; i < G.V; i++) {
+        E += adjList[i].size();
+    }
+    int V = G.V;
+    int numKmers = 0;
+    int C = 0;
+    
+    for (unitig_struct_t unitig : unitigs) {
+        C += unitig.ln;
+        numKmers +=  unitig.ln - K + 1;
+    }
+    
+    
+    if(DBGFLAG == NODENUMBER_DBG){
+        cout<<"Total Nodes: "<<V<<" Edges: "<<E<<" K-mers: "<<numKmers<<endl;
+    }
+    
     G.DFS();
     
     
@@ -1123,27 +1200,13 @@ int main(int argc, char** argv) {
     
     // COLLECT STATISTICS
     
-    //count total number of edges
-    int E = 0;
-    for (int i = 0; i < G.V; i++) {
-        E += adjList[i].size();
-    }
-    
-    int E_new = resolveLaterEdges.size();
-    int V = G.V;
-    int V_new = G.countNewNode;
-    
-    
-    int numKmers = 0;
-    int C = 0;
-    int C_new = 0;
-    for (unitig_struct_t unitig : unitigs) {
-        C += unitig.ln;
-        numKmers +=  unitig.ln - K + 1;
-    }
+ 
 
     
-    
+    int E_new = resolveLaterEdges.size();
+    int V_new = G.countNewNode;
+    int C_new = 0;
+ 
     map<int, string>::iterator it;
     int maxlen = 0;
     for (it = newSequences.begin(); it != newSequences.end(); it++)
@@ -1182,10 +1245,10 @@ int main(int argc, char** argv) {
     
     int maxera =sink_count + isolated_node_count;
     int maxerb =source_count + isolated_node_count;
-    int maxerc = sharedparent_count + isolated_node_count;
-    maxerb = max(maxerc, maxerb);
+    int maxerc = sharedparent_count + isolated_node_count + source_count;
+    maxerb = max(maxera, maxerb);
     
-    float upperbound = (1-((C-(K-1)*(G.V - max(maxera, maxerb)*1.0))/C))*100.0;
+    float upperbound = (1-((C-(K-1)*(G.V - max(maxerb, maxerc)*1.0))/C))*100.0;
     float saved_c = (1-(C_new*1.0/C))*100.0;
     
     formattedOutput(G);
