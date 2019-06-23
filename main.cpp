@@ -901,10 +901,10 @@ public:
         delete [] oldToNew;
         delete [] saturated;
         delete [] indegree;
-        delete [] global_indegree;
-        delete [] global_outdegree;
-        delete [] global_plusindegree;
-        delete [] global_plusoutdegree;
+//        delete [] global_indegree;
+//        delete [] global_outdegree;
+//        delete [] global_plusindegree;
+//        delete [] global_plusoutdegree;
         //delete [] global_selfloop;
     }
 };
@@ -1199,6 +1199,10 @@ int main(int argc, char** argv) {
     //bool visitedForReachable[V];
     cout<<"TIME for information gather: "<<readTimer() - time_a<<" sec."<<endl;
     
+    delete [] global_indegree;
+    delete [] global_outdegree;
+    delete [] global_plusindegree;
+    delete [] global_plusoutdegree;
     
     
     //    int maxera =sink_count + isolated_node_count;
