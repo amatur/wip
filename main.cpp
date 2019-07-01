@@ -91,6 +91,7 @@ int* global_outdegree;
 int* global_plusindegree;
 int* global_plusoutdegree;
 //bool* global_selfloop;
+
 int* global_issinksource;
 
 
@@ -397,6 +398,10 @@ public:
         }
         
         xc = 0;
+        bool* counted = new bool[V];
+        for (int i=0; i<V; i++) {
+            counted[i] = false;
+        }
         for(vector<edge_t> elist: adjList){
             int pos = 0;
             int neighbourCount = 0;
@@ -404,9 +409,10 @@ public:
             for(edge_t e: elist){
                 int v = e.toNode;
                 
-                if(global_plusindegree[v] == 1 && global_plusoutdegree[v] == 1){
+                if(!counted[v] && global_plusindegree[v] == 1 && global_plusoutdegree[v] == 1 && e.right == true ){
                     //cout<<"11XO "<<xc<<endl;
                     neighbourCount++;
+                    counted[v] = true;
                     //                    for (int i = 0; i< V; i++) {
                     //                        visitedForReachable[i]  = false;
                     //                    }
@@ -417,7 +423,9 @@ public:
                     
                 }
                 
-                if(global_indegree[v] - global_plusindegree[v] == 1 && global_indegree[v]  - global_plusoutdegree[v] == 1){
+                if(!counted[v] && global_indegree[v] - global_plusindegree[v] == 1 && global_indegree[v]  - global_plusoutdegree[v] == 1 && e.right == false ){
+                    neighbourCount++;
+                    counted[v] = true;
                     neighborCntSink++;
                 }
                 
@@ -436,6 +444,7 @@ public:
             
             xc++;
         }
+        //sharedparent_count = sharedparent_count/2 ;
     }
     
     
@@ -1211,12 +1220,12 @@ int main(int argc, char** argv) {
     //
     //    maxerb = max(maxera, maxerb);
     int maxerb = sharedparent_count + source_count + isolated_node_count;
-    int maxerc = sharedparent_count_sink + sink_count + isolated_node_count;
+    int maxerc = sharedparent_count + sink_count + isolated_node_count;
     
     float upperbound = (1-((C-(K-1)*(G.V - max(maxerb, maxerc)*1.0))/C))*100.0;
    
     
-    printf("%d %d %d %d %d %d %d %d %d %.6f%%\n", V, E, isolated_node_count, onecount, sink_count, source_count, numKmers, sharedparent_count, sharedparent_count_sink, upperbound);
+    printf("%d %d %d %d %d %d %d %d %.6f%%\n", V, E, isolated_node_count, onecount, sink_count, source_count, numKmers, sharedparent_count, upperbound);
     
     
     //STARTING DFS
@@ -1298,14 +1307,14 @@ int main(int argc, char** argv) {
     float persaved = ((save - overhead)*1.0 / spaceBefore) * 100.0; //including edge info
     float saved_c = (1-(C_new*1.0/C))*100.0;
     
-    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.6f%% \t %.6f%% \t %s \t %d \t %d \t %d \n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str(), numKmers, sharedparent_count, sharedparent_count_sink);
+    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.6f%% \t %.6f%% \t %s \t %d \t %d \n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str(), numKmers, sharedparent_count);
     
     time_a = readTimer();
     formattedOutput(G);
     cout<<"TIME to output: "<<readTimer() - time_a<<" sec."<<endl;
     
     //printf(")
-    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.6f%% \t %.6f%% \t %s \t %d \t %d \t %d \t %.6f\n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str(), numKmers, sharedparent_count, sharedparent_count_sink, getFileSizeBits()*1.0/numKmers);
+    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.6f%% \t %.6f%% \t %s \t %d \t %d \t %.6f\n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str(), numKmers, sharedparent_count, getFileSizeBits()*1.0/numKmers);
 
     
     return EXIT_SUCCESS;
