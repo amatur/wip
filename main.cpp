@@ -1,5 +1,9 @@
-// --- VERSION 3.1 ----
-//undocumented changes
+// --- VERSION 4.1 ----
+//upperbound with divide by 2
+
+//Caution:
+//removed all self-loops
+
 
 #include <cmath>
 #include<cstring>
@@ -23,8 +27,6 @@ using namespace std;
 
 int K = 0;
 string UNITIG_FILE;
-//int K = 11;
-//string UNITIG_FILE = "/Volumes/FAT32/data2019/phi11/list_reads.unitigs.fa";
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, NODENUMBER_DBG = 5, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
 
@@ -74,7 +76,7 @@ int isolated_node_count = 0;
 int sink_count = 0;
 int source_count = 0;
 int sharedparent_count = 0;
-int sharedparent_count_sink = 0;
+int sharparentCntRefined = 0;
 int onecount = 0;
 
 
@@ -238,6 +240,7 @@ public:
     bool* saturated;
     struct node_sorter * indegree;
     struct node_sorter * outdegree;
+    bool* counted;
     
     Graph() {
         color = new char[V];
@@ -252,6 +255,7 @@ public:
         global_plusoutdegree = new int[V];
         //global_selfloop = new bool[V];
         global_issinksource = new int[V];
+        counted = new bool[V];
         
         for (int i = 0; i < V; i++) {
             oldToNew[i].serial = -1;
@@ -264,7 +268,17 @@ public:
             global_plusoutdegree[i] = 0;
             //global_selfloop[i] = false;
             global_issinksource[i] = 0;
+            counted[i] = false;
         }
+    }
+    
+    
+    inline bool sRight(edge_t plusminusedge){
+        return !(plusminusedge.right == true);
+    }
+    
+    inline bool sLeft(edge_t plusminusedge){
+        return (plusminusedge.left == true);
     }
     
     void indegreePopulate(){
@@ -347,6 +361,7 @@ public:
             if(global_plusoutdegree[i] == 0 && global_plusindegree[i] != 0){
                 sink_count++;
                 global_issinksource[i] = 1;
+                counted[i] = true;
                 
                 if(DBGFLAG == SINKSOURCE){
                     cout<<"sink, ";
@@ -356,6 +371,7 @@ public:
             if(global_plusindegree[i] == 0 && global_plusoutdegree[i] != 0){
                 source_count++;
                 global_issinksource[i] = 1;
+                counted[i] = true;
                 
                 if(DBGFLAG == SINKSOURCE){
                     cout<<"source, ";
@@ -398,53 +414,53 @@ public:
         }
         
         xc = 0;
-        bool* counted = new bool[V];
-        for (int i=0; i<V; i++) {
-            counted[i] = false;
-        }
+        
+        
         for(vector<edge_t> elist: adjList){
-            int pos = 0;
-            int neighbourCount = 0;
-            int neighborCntSink = 0;
-            for(edge_t e: elist){
-                int v = e.toNode;
+            stack<int> countedNodes;
+
+            int neighborCount = 0;
+            for(edge_t e_xy: elist){
+                int y = e_xy.toNode;
                 
-                if(!counted[v] && global_plusindegree[v] == 1 && global_plusoutdegree[v] == 1 && e.right == true ){
-                    //cout<<"11XO "<<xc<<endl;
-                    neighbourCount++;
-                    counted[v] = true;
-                    //                    for (int i = 0; i< V; i++) {
-                    //                        visitedForReachable[i]  = false;
-                    //                    }
-                    //
-                    //                    if( !canReachSinkSource(v,visitedForReachable, true)){
-                    //                        neighbourCount++;
-                    //                    }
+//                if(!counted[y] && global_plusindegree[y] == 1 && global_plusoutdegree[y] == 1 && e_xy.right == true ){
+//                    neighborCnt++;
+//                    counted[y] = true;
+//                }
+                
+                if(!counted[y]){
+                    vector<edge_t> adjY = adjList[y];
+                    bool eligible = true;
+                    for(edge_t e_from_y : adjY){
+                        if(e_from_y.toNode!=xc){
+                            if(sRight(e_xy) == sLeft(e_from_y) ){
+                                eligible = false;
+                                break;
+                            }
+                        }
+                    }
+                    if(eligible){
+                        counted[y] = true;
+                        neighborCount++;
+                        countedNodes.push(y);
+                    }
                     
                 }
-                
-                if(!counted[v] && global_indegree[v] - global_plusindegree[v] == 1 && global_indegree[v]  - global_plusoutdegree[v] == 1 && e.right == false ){
-                    neighbourCount++;
-                    counted[v] = true;
-                    neighborCntSink++;
-                }
-                
             }
             
-            if(neighbourCount>0){
-                sharedparent_count += neighbourCount - 1 ;
-                //cout<<xc<<" count of such node"<<neighbourCount<<endl;
+
+            
+            if(neighborCount>0){
+                sharedparent_count += neighborCount - 1 ;
             }else{
-                //cout<<"DOYO "<<xc<<endl;
-            }
-            
-            if(neighborCntSink>0){
-                sharedparent_count_sink += neighborCntSink - 1 ;
+                while(!countedNodes.empty()){
+                    counted[countedNodes.top()] = false;
+                    countedNodes.pop();
+                }
             }
             
             xc++;
         }
-        //sharedparent_count = sharedparent_count/2 ;
     }
     
     
@@ -910,6 +926,7 @@ public:
         delete [] oldToNew;
         delete [] saturated;
         delete [] indegree;
+        delete [] counted;
 //        delete [] global_indegree;
 //        delete [] global_outdegree;
 //        delete [] global_plusindegree;
@@ -1214,15 +1231,9 @@ int main(int argc, char** argv) {
     delete [] global_plusoutdegree;
     
     
-    //    int maxera =sink_count + isolated_node_count;
-    //    int maxerb =source_count + isolated_node_count;
-    //    int maxerc = sharedparent_count + isolated_node_count + source_count;
-    //
-    //    maxerb = max(maxera, maxerb);
-    int maxerb = sharedparent_count + source_count + isolated_node_count;
-    int maxerc = sharedparent_count + sink_count + isolated_node_count;
     
-    float upperbound = (1-((C-(K-1)*(G.V - max(maxerb, maxerc)*1.0))/C))*100.0;
+    int walkstarting_node_count = ceil((sharedparent_count + sink_count + source_count)/2.0) + isolated_node_count;
+    float upperbound = (1-((C-(K-1)*(G.V - walkstarting_node_count*1.0))/C))*100.0;
    
     
     printf("%d %d %d %d %d %d %d %d %.6f%%\n", V, E, isolated_node_count, onecount, sink_count, source_count, numKmers, sharedparent_count, upperbound);
