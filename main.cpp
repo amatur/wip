@@ -21,6 +21,9 @@
 #include <list>
 #include <stack>
 #include <unordered_map>
+#include <utility>
+#include <queue>
+#include <deque>
 #include <unistd.h>
 
 using namespace std;
@@ -30,12 +33,12 @@ string UNITIG_FILE;
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, NODENUMBER_DBG = 5, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
 
-enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6, RANDOM_DFS = 7, NODEASSIGN = 8, SOURCEFIRST = 9};
+enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6, RANDOM_DFS = 7, NODEASSIGN = 8, SOURCEFIRST = 9, NEWMETHOD = 12, PROFILE_ONLY = 11, EPPRIOR=12};
 
 DEBUGFLAG_T DBGFLAG = NODENUMBER_DBG;
-ALGOMODE_T ALGOMODE = BASIC;
+ALGOMODE_T ALGOMODE = NEWMETHOD;
 
-string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first"
+string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "new_method", "profile_only", "endpoint_priority"
 };
 
 typedef unsigned char uchar;
@@ -95,7 +98,9 @@ int* global_plusoutdegree;
 //bool* global_selfloop;
 
 int* global_issinksource;
+int* global_priority;
 
+map<pair <int, int>, int> inOutCombo;
 
 vector<vector<edge_t> > adjList;
 vector<vector<edge_t> > reverseAdjList;
@@ -225,6 +230,89 @@ void printAllBCALMSequences(vector<unitig_struct_t> unitigs) {
 
 
 
+class GroupMerger {
+public:
+    map<int, bool> fwdVisited;
+    map<int, bool> bwdVisited;
+    map<int, int> bwdWalkId;
+    map<int, int> fwdWalkId;
+    GroupMerger() {
+    }
+    void connectGroups(int from, int to){
+        fwdVisited[from] = false;
+        bwdVisited[to] = false;
+        fwdWalkId[from] = to;
+        bwdWalkId[to] = from;
+    }
+    ~GroupMerger() {
+    }
+};
+
+
+class DisjointSet {
+    unordered_map<int, int> parent;
+
+public:
+    DisjointSet() {
+    }
+    
+    
+    
+    void make_set(int id) {
+        this->parent[id] = -1;
+    }
+    
+    void Union(int xId, int yId) {
+       int xset = find_set(xId);
+       int yset = find_set(yId);
+        
+        if(xset != yset)
+        {
+            parent[xset] = yset;
+        }
+        
+        
+//        // Attach smaller rank tree under root of high rank tree
+//        // (Union by Rank)
+//        if (subsets[xroot].rank < subsets[yroot].rank)
+//            subsets[xroot].parent = yroot;
+//        else if (subsets[xroot].rank > subsets[yroot].rank)
+//            subsets[yroot].parent = xroot;
+//
+//        // If ranks are same, then make one as root and increment
+//        // its rank by one
+//        else
+//        {
+//            subsets[yroot].parent = xroot;
+//            subsets[xroot].rank++;
+//        }
+    }
+    
+    int find_set(int id) {
+//        if(parent.count(id)==0){
+//            exit(EXIT_FAILURE);
+//            return -1;
+//        }
+        if (parent[id] == -1)
+            return id;
+        return find_set(parent[id]);
+        
+        
+//        // find root and make root as parent of i (path compression)
+//        if (subsets[i].parent != i)
+//            subsets[i].parent = find(subsets, subsets[i].parent);
+//
+//        return subsets[i].parent;
+    }
+    
+    
+    
+    ~DisjointSet(){
+    }
+    
+};
+
+
 
 
 class Graph {
@@ -241,6 +329,8 @@ public:
     struct node_sorter * indegree;
     struct node_sorter * outdegree;
     bool* counted;
+    DisjointSet disSet;
+    GroupMerger gmerge;
     
     Graph() {
         color = new char[V];
@@ -255,9 +345,18 @@ public:
         global_plusoutdegree = new int[V];
         //global_selfloop = new bool[V];
         global_issinksource = new int[V];
+        global_priority = new int[V];
         counted = new bool[V];
         
+        
+        
         for (int i = 0; i < V; i++) {
+            
+            if(ALGOMODE == NEWMETHOD){
+                disSet.make_set(i);
+            }
+            
+            
             oldToNew[i].serial = -1;
             saturated[i] = false;
             indegree[i].sortkey = 0;
@@ -268,6 +367,7 @@ public:
             global_plusoutdegree[i] = 0;
             //global_selfloop[i] = false;
             global_issinksource[i] = 0;
+            global_priority[i] = 0;
             counted[i] = false;
         }
     }
@@ -331,11 +431,20 @@ public:
             xc++;
         }
         
-        
-        
+        for(int i = 0; i<5; i++){
+            for(int j = 0; j<5; j++){
+                inOutCombo[make_pair(i,j)] = 0;
+            }
+        }
         for(int i = 0; i<V; i++){
             int minusindegree = (global_indegree[i] - global_plusindegree[i] );
             int minusoutdegree = (global_outdegree[i] - global_plusoutdegree[i] );
+            
+            pair<int, int> a;
+            a = make_pair(global_plusindegree[i], global_plusoutdegree[i]);
+            inOutCombo[a] = (inOutCombo.count(a)  ? inOutCombo[a] + 1 : 1  );
+            
+            
             
             if(DBGFLAG == SINKSOURCE){
                 cout<<i<<"is ";
@@ -361,6 +470,7 @@ public:
             if(global_plusoutdegree[i] == 0 && global_plusindegree[i] != 0){
                 sink_count++;
                 global_issinksource[i] = 1;
+                global_priority[i] = 5;
                 counted[i] = true;
                 
                 if(DBGFLAG == SINKSOURCE){
@@ -371,6 +481,7 @@ public:
             if(global_plusindegree[i] == 0 && global_plusoutdegree[i] != 0){
                 source_count++;
                 global_issinksource[i] = 1;
+                global_priority[i] = 5;
                 counted[i] = true;
                 
                 if(DBGFLAG == SINKSOURCE){
@@ -441,6 +552,7 @@ public:
                     }
                     if(eligible){
                         counted[y] = true;
+                        global_priority[y] = 4;
                         neighborCount++;
                         countedNodes.push(y);
                     }
@@ -449,15 +561,28 @@ public:
             }
             
 
-            
-            if(neighborCount>0){
-                sharedparent_count += neighborCount - 1 ;
+            if(global_issinksource[xc] == 1){
+                if(neighborCount>1){
+                    sharedparent_count += neighborCount - 1 ;
+                }else{
+                    while(!countedNodes.empty()){
+                        counted[countedNodes.top()] = false;
+                        countedNodes.pop();
+                    }
+                }
             }else{
-                while(!countedNodes.empty()){
-                    counted[countedNodes.top()] = false;
-                    countedNodes.pop();
+                if(neighborCount>2){
+                    sharedparent_count += neighborCount - 2 ;
+                }else{
+                    while(!countedNodes.empty()){
+                        counted[countedNodes.top()] = false;
+                        countedNodes.pop();
+                    }
                 }
             }
+            
+            
+            
             
             xc++;
         }
@@ -491,7 +616,12 @@ public:
                     random_shuffle ( adjx.begin(), adjx.end() );
                 }
                 
-                
+                if(ALGOMODE == EPPRIOR){
+                    sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
+                         {
+                             return global_priority[lhs.toNode]   <  global_priority[rhs.toNode]  ;
+                         });
+                }
                 
                 if(ALGOMODE == INDEGREE_DFS){
                     sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
@@ -553,6 +683,10 @@ public:
                     newToOld.push_back(xxx);
                     oldToNew[x].serial = countNewNode++; // countNewNode starts at 0, then keeps increasing
                     
+                    
+                    
+                    
+                    
                     //make the sequence
                     //NOT CORRECT? I am not sure
                     if(nodeSign[x]==false){
@@ -576,6 +710,13 @@ public:
                     
                     newToOld[oldToNew[p[x]].serial].push_back(x);
                     oldToNew[x].serial = oldToNew[p[x]].serial;
+                    
+                    
+                    if(ALGOMODE==NEWMETHOD){
+                        disSet.Union(x, p[x]);
+                    }
+                    
+                    
                     oldToNew[x].startPos = oldToNew[p[x]].endPos + 1;
                     if (u < K) {
                         oldToNew[x].endPos = oldToNew[x].startPos + 1; // do we actually see this? yes
@@ -681,6 +822,39 @@ public:
                             }
                             
                         } else {
+                            
+                            //merger
+                            if(ALGOMODE == NEWMETHOD){
+                                // y is not white
+                                bool consistentEdge = (nodeSign[y] == yEdge.right && (p[x]==-1 || (p[x]!=-1&& nodeSign[x] == yEdge.left)) );
+                                if(p[y]==-1 && consistentEdge && oldToNew[x].serial != oldToNew[y].serial){
+                                    
+                                    //cout<<"x: "<<x<<":" <<disSet.find_set(x)<<" ";
+                                    //cout<<"y: "<<y<<":" <<disSet.find_set(y) <<endl;
+                                    
+                                    //not in same group already, prevent cycle
+                                    if(disSet.find_set(x)!=disSet.find_set(y)){
+                                        
+                                       nodeSign[x] = yEdge.left;
+                                       nodeSign[y] = yEdge.right;
+                                       p[y] = x;
+                                       saturated[x] = true; //found a child
+                                       // oldToNew[y].serial
+                                        
+                                        disSet.Union(x, y);
+                                        //cout<<"x: "<<disSet.find_set(x);
+                                        //cout<<"y: "<<disSet.find_set(y);
+                                        cout<<endl;
+                                        
+                                        //cout<<oldToNew[x].serial<<"+"<<oldToNew[y].serial<<endl;
+                                        gmerge.connectGroups(oldToNew[x].serial,oldToNew[y].serial );
+                                        
+                                    }
+                                    
+                                }
+
+                            }
+                            
                             if (y != p[x]) {
                                 edge_both_t e;
                                 e.edge = yEdge;
@@ -785,7 +959,16 @@ public:
             }
             vector<struct node_sorter> myvector (indegree, indegree+V);
             sort (myvector.begin(), myvector.end(), sort_by_key_inverted);
-            //random_shuffle ( myvector.begin(), myvector.end() );
+            copy(myvector.begin(), myvector.end(), indegree);
+        }
+        
+        if(ALGOMODE == EPPRIOR){
+            for (int i = 0; i < V; i++) {
+                indegree[i].node = i;
+                indegree[i].sortkey = global_priority[i];
+            }
+            vector<struct node_sorter> myvector (indegree, indegree+V);
+            sort (myvector.begin(), myvector.end(), sort_by_key_inverted);
             copy(myvector.begin(), myvector.end(), indegree);
         }
         
@@ -850,8 +1033,14 @@ public:
         cout<<"Basic V loop time: "<<readTimer() - time_a<<" sec"<<endl;
         
         
+        
+        
         time_a = readTimer();
+     
         for (int j = 0; j < V; j++) {
+
+            
+            
             int i;
             if(ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1 || ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1 || ALGOMODE == SOURCEFIRST){
                 i = indegree[j].node;
@@ -959,6 +1148,41 @@ void printNewGraph(Graph &G){
     delete [] newToOld;
     
 }
+
+
+void tableDegreeDist(Graph &G){
+    string plainOutput = "plainOutput.fa";
+    ofstream plainfile;
+    plainfile.open(plainOutput);
+    
+    string stitchedUnitigs = "stitchedUnitigs.txt";
+    ofstream myfile;
+    myfile.open (stitchedUnitigs);
+    //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
+    for (int newNodeNum = 0; newNodeNum<G.countNewNode; newNodeNum++){
+        myfile << '>' << newNodeNum <<" LN:i:"<<newSequences[newNodeNum].length()<<" ";
+        //plainfile << '>' << newNodeNum;
+        
+        vector<newEdge_t> edges = newAdjList.at(newNodeNum);
+        for(newEdge_t edge: edges){
+            myfile<<"L:" << edge.kmerStartIndex << ":" << boolToCharSign(edge.edge.left) << ":" << edge.edge.toNode << ":" << boolToCharSign(edge.edge.left) <<":"<< edge.kmerEndIndex <<" ";
+        }
+        //plainfile<<endl;
+        myfile<<endl;
+        
+        plainfile<<newSequences[newNodeNum];
+        myfile<<newSequences[newNodeNum];
+        
+        plainfile<<endl;
+        myfile<<endl;
+    }
+    //myfile << '>' << newNodeNum <<">0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:- " ;
+    myfile.close();
+    plainfile.close();
+    
+}
+
+
 
 void formattedOutput(Graph &G){
     string plainOutput = "plainOutput.fa";
@@ -1120,6 +1344,79 @@ int getFileSizeBits(string fn = "plainOutput.fa.gz"){
     return count*1024*8;
 }
 
+set<int> extractIntegerWords(string str)
+{
+    set<int> retset;
+    stringstream ss;
+    
+    /* Storing the whole string into string stream */
+    ss << str;
+    
+    /* Running loop till the end of the stream */
+    string temp;
+    int found;
+    while (!ss.eof()) {
+        
+        /* extracting word by word from stream */
+        ss >> temp;
+        
+        /* Checking the given word is integer or not */
+        if (stringstream(temp) >> found)
+            retset.insert(found);
+        
+        /* To save from space at the end of string */
+        temp = "";
+    }
+    return retset;
+}
+
+void makeGraphDot(){
+    FILE * fp;
+    
+    fp = fopen ("/Users/Sherlock/Downloads/graphviz-2.40.1/graph.gv", "w+");
+   
+    fprintf(fp, "digraph d {\n");
+    string ipstr = "20 19 18";
+    set<int> verticesMarked;
+    set<int> vertices = extractIntegerWords(ipstr) ;
+    set<int> vMarked(vertices.begin(), vertices.end());
+    //set<pair<int, int> > edges;
+    
+    for(int x: vertices){
+        vector<edge_t> adjX = adjList[x];
+        for(edge_t ex: adjX){
+            vertices.insert(ex.toNode);
+            fprintf(fp, "%d -> %d[taillabel=\"%d\", headlabel=\"%d\", arrowhead=\"none\"]\n", x, ex.toNode, ex.left, !ex.right);
+            
+            //            pair<int, int> p;
+            //            if(x < ex.toNode){
+            //                p.first = x;
+            //                p.second = ex.toNode;
+            //            }else{
+            //                p.second = x;
+            //                p.first = ex.toNode;
+            //            }
+            //            edges.insert(p);
+        }
+    }
+    for(int x: vertices){
+        if(vMarked.count(x)>0){
+            fprintf(fp, "%d [label=\"%d\", color=\"red\"]\n", x, x);
+        }else{
+            fprintf(fp, "%d [label=\"%d\"]\n", x, x);
+        }
+        
+    }
+    
+    //for all int in list
+    //make a list of neighbors add them
+    
+    
+    fprintf(fp, "}\n");
+    
+    fclose(fp);
+}
+
 int main(int argc, char** argv) {
     const char* nvalue = "" ;
     
@@ -1231,12 +1528,25 @@ int main(int argc, char** argv) {
     delete [] global_plusoutdegree;
     
     
+    makeGraphDot();
+    
+    
     
     int walkstarting_node_count = ceil((sharedparent_count + sink_count + source_count)/2.0) + isolated_node_count;
     float upperbound = (1-((C-(K-1)*(G.V - walkstarting_node_count*1.0))/C))*100.0;
+    float upperboundLoose = (1-((C-(K-1)*(G.V - 1.0))/C))*100.0;
    
     
-    printf("%d %d %d %d %d %d %d %d %.6f%%\n", V, E, isolated_node_count, onecount, sink_count, source_count, numKmers, sharedparent_count, upperbound);
+    printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%.6f%%\t%.6f%%\n", K, numKmers, C, V, E, isolated_node_count, onecount, sink_count, source_count, sharedparent_count, upperbound, upperboundLoose);
+    
+    // Iterating the map and printing ordered values
+    for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
+        cout << "(" << i->first.first<< ", "<< i->first.second << ")" << " := " << i->second << '\n';
+    }
+    
+    if(ALGOMODE == PROFILE_ONLY){
+        return 0;
+    }
     
     
     //STARTING DFS
@@ -1294,6 +1604,98 @@ int main(int argc, char** argv) {
     }
     cout<<"TIME to edge resolve: "<<readTimer() - time_a<<" sec."<<endl;
 
+    cout<<"GROUP PRINT"<<endl;
+    bool* merged = new bool[G.countNewNode];
+    for (int i = 0; i<G.countNewNode; i++) {
+        merged[i] = false;
+    }
+    
+    
+    /***MERGE START***/
+    int C_better = 0;
+    int Vcounttttt = 0;
+    ofstream betterfile;
+    betterfile.open("betterUnitigs.fa");
+
+    
+    for ( const auto& p: G.gmerge.fwdWalkId)
+    {
+        if(G.gmerge.fwdVisited[p.first] == false){
+            
+            int fromnode =p.first;
+            int tonode = p.second;
+            deque<int> lst;
+            
+            lst.push_back(fromnode);
+            lst.push_back(tonode);
+            
+            G.gmerge.fwdVisited[fromnode] = true;
+            G.gmerge.bwdVisited[tonode] = true;
+            
+            
+            if(G.gmerge.fwdVisited.count(tonode)>0){
+                while(G.gmerge.fwdVisited[tonode] == false){
+                    G.gmerge.fwdVisited[tonode] = true;
+                    tonode = G.gmerge.fwdWalkId[tonode];
+                    G.gmerge.bwdVisited[tonode] = true;
+                    
+                    lst.push_back(tonode);
+                    if(G.gmerge.fwdVisited.count(tonode)==0)
+                        break;
+                }
+            }
+            if(G.gmerge.bwdVisited.count(fromnode)>0){
+                while(G.gmerge.bwdVisited[fromnode] == false){
+                    G.gmerge.bwdVisited[fromnode] = true;
+                    fromnode = G.gmerge.bwdWalkId[fromnode];
+                    G.gmerge.fwdVisited[fromnode] = true;
+                    
+                    lst.push_front(fromnode);
+                    if(G.gmerge.bwdVisited.count(fromnode)==0)
+                        break;
+                }
+            }
+            
+            string mergeString = "";
+            for(auto i: lst){
+                merged[i] = true;
+                mergeString = plus_strings(mergeString, newSequences[i], K);
+                //cout<<i<<" ";
+            }
+            
+            
+            //cout<<endl;
+            Vcounttttt ++;
+            C_better+=mergeString.length();
+            betterfile << '>' << fromnode <<" LN:i:"<<mergeString.length()<<" ";
+            betterfile<<endl;
+            betterfile<<mergeString;
+            betterfile<<endl;
+            
+        }
+    }
+    
+    
+    for (int newNodeNum = 0; newNodeNum<G.countNewNode; newNodeNum++){
+        if(merged[newNodeNum] == false){
+            betterfile << '>' << newNodeNum <<" LN:i:"<<newSequences[newNodeNum].length()<<" ";
+            betterfile<<endl;
+            betterfile<<newSequences[newNodeNum];
+            betterfile<<endl;
+            C_better+=newSequences[newNodeNum].length();
+            Vcounttttt++;
+        }
+        
+       
+        
+    }
+    betterfile.close();
+    delete[] merged;
+    
+//    for(map<int, int> a: mergelist){
+//        cout<<a.first<<" -> "<<a.second<<endl;
+//        string a = plus_strings(u, childSeq, K);
+//    }
     
     double TIME_TOTAL_SEC = readTimer() - startTime;
     
@@ -1316,7 +1718,7 @@ int main(int argc, char** argv) {
     int save = (C - C_new) * ACGT_DTYPE_SIZE + (E - E_new)*(NODENUM_DTYPE_SIZE + SIGN_DTYPE_SIZE);
     int overhead = (E_new)*(2 * EDGE_INT_DTYPE_SIZE);
     float persaved = ((save - overhead)*1.0 / spaceBefore) * 100.0; //including edge info
-    float saved_c = (1-(C_new*1.0/C))*100.0;
+    float saved_c = (1-(C_better*1.0/C))*100.0;
     
     printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.6f%% \t %.6f%% \t %s \t %d \t %d \n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str(), numKmers, sharedparent_count);
     
@@ -1325,7 +1727,7 @@ int main(int argc, char** argv) {
     cout<<"TIME to output: "<<readTimer() - time_a<<" sec."<<endl;
     
     //printf(")
-    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.6f%% \t %.6f%% \t %s \t %d \t %d \t %.6f\n", V, V_new, E, E_new, C, C_new, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str(), numKmers, sharedparent_count, getFileSizeBits()*1.0/numKmers);
+    printf("%d \t %d \t %d \t %d \t %d \t %d \t %f \t %f \t %.2f%% \t %d \t %d \t %d \t %f \t %f \t %d \t %d \t %d \t %d \t %.6f%% \t %.6f%% \t %s \t %d \t %d \t %.6f\n", V, Vcounttttt, E, E_new, C, C_better, spaceBefore / 1024.0, (save - overhead) / 1024.0, persaved, U_MAX, maxlen, K, TIME_READ_SEC, TIME_TOTAL_SEC, isolated_node_count, onecount, sink_count, source_count, upperbound, saved_c, mapmode[ALGOMODE].c_str(), numKmers, sharedparent_count, getFileSizeBits()*1.0/numKmers);
 
     
     return EXIT_SUCCESS;
