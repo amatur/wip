@@ -1,5 +1,5 @@
-// --- VERSION 4.1 ----
-//upperbound with divide by 2
+// --- VERSION 5.1 ----
+// forward ext + two way + bracket error
 
 //Caution:
 //removed all self-loops
@@ -28,8 +28,8 @@
 
 using namespace std;
 
-int K = 31;
-string UNITIG_FILE = "/Volumes/FAT32/data2019/chol31/list_reads.unitigs.fa";
+int K = 11;
+string UNITIG_FILE = "/Volumes/exFAT/data2019/phi/11/list_reads.unitigs.fa";
 int C_better = 0;
 int C_bracketed = 0;
 int Vcounttttt = 0;
@@ -38,16 +38,14 @@ int C_new = 0;
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, NODENUMBER_DBG = 5, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
 
-enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6, RANDOM_DFS = 7, NODEASSIGN = 8, SOURCEFIRST = 9, NEWMETHOD = 15, PROFILE_ONLY = 11, EPPRIOR=12, GRAPHPRINT = 13, TIGHTUB = 14, BRACKETCOMP = 15};
+enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6, RANDOM_DFS = 7, NODEASSIGN = 8, SOURCEFIRST = 9, TWOWAYEXT = 10, PROFILE_ONLY = 11, EPPRIOR=12, GRAPHPRINT = 13, TIGHTUB = 14, BRACKETCOMP = 15};
 
-bool FLG_NEWUB = false;
+bool FLG_NEWUB = true;
 
 DEBUGFLAG_T DBGFLAG = NONE; //NODENUMBER_DBG
-ALGOMODE_T ALGOMODE = BRACKETCOMP;
+ALGOMODE_T ALGOMODE = TWOWAYEXT;
 
-
-
-string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "new_method", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "bracket_comp"
+string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "two_way_extension", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "bracket_comp"
 };
 
 typedef unsigned char uchar;
@@ -121,7 +119,7 @@ set<int> newNewMarker;
 
 vector<list<int> > newToOld;
 vector<int> walkFirstNode; //given a walk id, what's the first node of that walk
-unordered_map<int, vector<edge_t> > sinkSrcEdges;
+unordered_map<int, vector<edge_t> > sinkSrcEdges; //int is the unitig id (old id)
 
 inline string plus_strings(const string& a, const string& b, size_t kmersize) {
     if (a == "") return b;
@@ -145,7 +143,7 @@ bool charToBool(char c) {
 }
 
 string reverseComplement(string base) {
-    int len = base.length();
+    size_t len = base.length();
     char* out = new char[len + 1];
     out[len] = '\0';
     for (int i = 0; i < len; i++) {
@@ -256,7 +254,7 @@ public:
 
 class Graph {
 public:
-    int V = adjList.size();
+    size_t V = adjList.size();
     int countNewNode = 0;
     int time = 0;
     
@@ -288,7 +286,7 @@ public:
         
         for (int i = 0; i < V; i++) {
             
-            if(ALGOMODE == NEWMETHOD){
+            if(ALGOMODE == TWOWAYEXT){
                 disSet.make_set(i);
             }
             
@@ -419,7 +417,7 @@ public:
                         //if(countedSides.count(pairr)==0)
                         
                         
-                        countedSides.insert(pairr);
+                        //countedSides.insert(pairr);
                     }
                 }
                 
@@ -598,9 +596,8 @@ public:
                     newToOld.push_back(xxx);
                     oldToNew[x].serial = countNewNode++; // countNewNode starts at 0, then keeps increasing
                     
-                    if(ALGOMODE == BRACKETCOMP){
-                        walkFirstNode.push_back(x);
-                    }
+                    //added while doing bracket comp
+                    walkFirstNode.push_back(x);
                     
                     
                     //make the sequence
@@ -609,11 +606,11 @@ public:
                         newSequences[oldToNew[x].serial] = reverseComplement(unitigs.at(x).sequence);
                         
                         
-                        newNewSequences[x] = reverseComplement(unitigs.at(x).sequence);
+                        //newNewSequences[x] = reverseComplement(unitigs.at(x).sequence);
                     }else{
                         newSequences[oldToNew[x].serial] = (unitigs.at(x).sequence);
                         
-                        newNewSequences[x] = (unitigs.at(x).sequence);
+                        //newNewSequences[x] = (unitigs.at(x).sequence);
                     }
                     
                     
@@ -633,7 +630,7 @@ public:
                     oldToNew[x].serial = oldToNew[p[x]].serial;
                     
                     
-                    if(ALGOMODE==NEWMETHOD){
+                    if(ALGOMODE==TWOWAYEXT){
                         disSet.Union(x, p[x]);
                     }
                     
@@ -754,7 +751,7 @@ public:
                         } else {
                             
                             //merger
-                            if(ALGOMODE == NEWMETHOD){
+                            if(ALGOMODE == TWOWAYEXT){
                                 // y is not white
                                 bool consistentEdge = (nodeSign[y] == yEdge.right && (p[x]==-1 || (p[x]!=-1&& nodeSign[x] == yEdge.left)) );
                                 if(p[y]==-1 && consistentEdge && oldToNew[x].serial != oldToNew[y].serial){
@@ -990,6 +987,12 @@ public:
                 }
             }
             newSequences[i] = s;
+            
+            for(int x: newToOld[i]){
+                newNewSequences[x] = s;
+            }
+           
+            C_new += s.length();
         }
         cout<<"TIME to stitch: "<<readTimer() - time_a<<" sec."<<endl;
         
@@ -1116,6 +1119,9 @@ public:
                 int sinksrc = x.first;
                 string bracketed = unitigs.at(sinksrc).sequence;
                 
+                
+               
+                /*
                 for(edge_t e: x.second){
                     //if this is a walk starting vertex
                     if(walkFirstNode[oldToNew[e.toNode].serial] == e.toNode && newNewMarker.count(e.toNode) == 0){
@@ -1128,6 +1134,9 @@ public:
                         
                     }
                 }
+                */
+                
+                
                 if(strs.size()>1){
                     for(string s: strs){
                         bracketed += "|" + s.substr(K - 1, s.length() - (K - 1)); //start from k-1
@@ -1135,6 +1144,8 @@ public:
                 }
                 if(strs.size()==1){
                     bracketed +=strs.at(0);
+                }
+                if(strs.size()==0){
                 }
                 //bracketedStrings.push_back(bracketed);
                 plainfile<<bracketed;
@@ -1145,7 +1156,8 @@ public:
             
             for (pair<int, string> element : newNewSequences) {
                 int x = element.first;  // unitig id of walk starting vertex
-                if(newNewMarker.count(x)==0 && walkFirstNode[oldToNew[x].serial] == x){
+               // if(newNewMarker.count(x)==0 && walkFirstNode[oldToNew[x].serial] == x){
+                 if(newNewMarker.count(x)==0 && walkFirstNode[oldToNew[x].serial] == x){
                     plainfile<<newNewSequences[x];
                     C_bracketed+=newNewSequences[x].length();
                     plainfile<<endl;
@@ -1232,19 +1244,19 @@ void printNewGraph(Graph &G){
 }
 
 
-void formattedOutput(Graph &G){
-    string plainOutput = "plainOutputOld.txt";
+void formattedOutputForwardExt(Graph &G){
+    string plainOutput = "plainOutputFwd.txt";
     ofstream plainfile;
     plainfile.open(plainOutput);
     
-    string stitchedUnitigs = "stitchedUnitigsOld.fa";
+    string stitchedUnitigs = "stitchedUnitigsFwd.fa";
     ofstream myfile;
     myfile.open (stitchedUnitigs);
     //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
     for (int newNodeNum = 0; newNodeNum<G.countNewNode; newNodeNum++){
         myfile << '>' << newNodeNum <<" LN:i:"<<newSequences[newNodeNum].length()<<" ";
         //plainfile << '>' << newNodeNum;
-        C_new+=newSequences[newNodeNum].length();
+        //C_new+=newSequences[newNodeNum].length();
         //plainfile<<endl;
         myfile<<endl;
         
@@ -1648,7 +1660,7 @@ int main(int argc, char** argv) {
            %.2f%%\t",
            isolated_node_count*100.0/V,
            (sink_count+source_count)*100.0/V);
-    fprintf(statFile, "\n");
+    //fprintf(statFile, "\n");
 
     // Iterating the map and printing ordered values
 //    for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
@@ -1656,6 +1668,7 @@ int main(int argc, char** argv) {
 //    }
     
     if(ALGOMODE == PROFILE_ONLY){
+        fprintf(statFile, "\n");
         return 0;
     }
 
@@ -1705,25 +1718,25 @@ int main(int argc, char** argv) {
     
     
     time_a = readTimer();
-    formattedOutput(G);
+    formattedOutputForwardExt(G);
     cout<<"TIME to output: "<<readTimer() - time_a<<" sec."<<endl;
     
     
+    if(ALGOMODE==BRACKETCOMP){
+        C_better = C_bracketed;
+    }else if(ALGOMODE == TWOWAYEXT){
+        //C_better = C_better;
+    }else if(ALGOMODE == BASIC){
+        C_better = C_new;
+    }
     
-    //C_better = C_new;
     
     float percent_saved_c = (1-(C_better*1.0/C))*100.0;
-    float percent_bracketed_c = (1-(C_bracketed*1.0/C))*100.0;
-    float theoreticalBitsKmerSaved =C_better*2.0/numKmers;
-    float theoreticalBitsKmerSavedBracketed =C_bracketed*2.0/numKmers;
+   float theoreticalBitsKmerSaved =C_better*2.0/numKmers;
     
     fprintf(statFile, "%s\t",  mapmode[ALGOMODE].c_str());
     fprintf(statFile, "%d\t\
            %d\t\
-            %.2f%%\t\
-            %.2f%%\t\
-           %d\t\
-           %.2f\t\
             %.2f%%\t\
             %.2f%%\t\
            %d\t\
@@ -1733,11 +1746,8 @@ int main(int argc, char** argv) {
            percent_saved_c,
             upperbound - percent_saved_c,
            C_better,
-           theoreticalBitsKmerSaved,
-            percent_bracketed_c,
-            upperbound - percent_bracketed_c,
-           C_bracketed,
-           theoreticalBitsKmerSavedBracketed);
+           theoreticalBitsKmerSaved
+            );
     fprintf(statFile, "%.2f\t\
            %.2f\t",
            TIME_READ_SEC,
