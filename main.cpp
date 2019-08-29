@@ -1,4 +1,5 @@
-// --- VERSION 5.1 ----
+// --- VERSION 5.2 ----
+// - Aug 28
 // forward ext + two way + bracket error
 
 //Caution:
@@ -28,12 +29,14 @@
 
 using namespace std;
 
-int K = 11;
-string UNITIG_FILE = "/Volumes/exFAT/data2019/phi/11/list_reads.unitigs.fa";
-int C_better = 0;
+int K = 55;
+string UNITIG_FILE = "/Volumes/exFAT/data2019/chol/55/list_reads.unitigs.fa";
+int C_twoway = 0;
 int C_bracketed = 0;
-int Vcounttttt = 0;
+int V_twoway = 0;
+int V_new = 0;
 int C_new = 0;
+int V_bracketed = 0;
 
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, NODENUMBER_DBG = 5, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
@@ -46,6 +49,8 @@ DEBUGFLAG_T DBGFLAG = NONE; //NODENUMBER_DBG
 ALGOMODE_T ALGOMODE = TWOWAYEXT;
 
 string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "two_way_extension", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "bracket_comp"
+};
+string modefilename[] = {"Fwd", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "Tip"
 };
 
 typedef unsigned char uchar;
@@ -497,7 +502,7 @@ public:
     void DFS_visit(int u) {
         if(ALGOMODE == BRACKETCOMP){
             
-            if(global_issinksource[u]){
+            if(global_issinksource[u]==1){
                 vector<edge_t> adju = adjList.at(u);
                 vector<edge_t> myvector;
                 for (edge_t e : adju) {
@@ -974,17 +979,164 @@ public:
         
         
         
+        //@@@@@ BRACKETED
+        if(ALGOMODE == BRACKETCOMP){
+            for (auto const& x : sinkSrcEdges)
+            {
+                int sinksrc = x.first;
+        
+                string bracketed = unitigs.at(sinksrc).sequence;
+                
+                
+                for(edge_t e: x.second){
+                    if(color[sinksrc] != 'w'){
+                        break;
+                    }
+                    
+                    if(nodeSign[e.toNode] == e.right && color[e.toNode]!='w'){
+                        //if this is a walk starting vertex
+                        //which walk?
+                        int whichwalk = oldToNew[e.toNode].serial;
+                        //case 1 a
+                        if(walkFirstNode[oldToNew[e.toNode].serial] == e.toNode){
+                            color[sinksrc] = 'b';
+                            oldToNew[sinksrc].serial = whichwalk;
+                            
+                            nodeSign[sinksrc] = e.left;
+                            //cout<<whichwalk<<": before size: "<<newToOld[whichwalk].size()<< " ->"<<newToOld[whichwalk].front();
+                            newToOld[whichwalk].insert(newToOld[whichwalk].begin(), sinksrc);
+                            //cout<<whichwalk<<": after size: "<<newToOld[whichwalk].size()<< " ->"<<newToOld[whichwalk].front();
+                            //cout<<endl;
+                        }else{
+                            
+                             //else sink/src to left
+                            color[sinksrc] = 'l';
+                            oldToNew[sinksrc].serial = whichwalk;
+                            nodeSign[sinksrc] = e.left;
+                            newToOld[whichwalk].insert(newToOld[whichwalk].end(), sinksrc);
+                            /*
+                            std::list<int>::iterator it;
+                            
+                            it = find (newToOld[whichwalk].begin(), newToOld[whichwalk].end(), e.toNode);
+                            newToOld[whichwalk].insert(it, sinksrc);
+                            */
+                        }
+                       
+                        
+                        
+                    }
+                    
+                    if(nodeSign[e.toNode] != e.right && color[e.toNode]!='w'){
+                        //if this is a walk starting vertex
+                        //which walk?
+                        int whichwalk = oldToNew[e.toNode].serial;
+
+                        
+                        //if this is a walk ending vertex
+                        //walksize of vertex e.toNode
+                        size_t walksize = newToOld[whichwalk].size();
+                        if(newToOld[whichwalk].back() == e.toNode){
+                            color[sinksrc] = 'b';
+                            oldToNew[sinksrc].serial = whichwalk;
+                            
+                            nodeSign[sinksrc] = !e.left;
+                            //cout<<whichwalk<<": before size: "<<newToOld[whichwalk].size()<< " ->"<<newToOld[whichwalk].front();
+                            
+                            C_new+= unitigs.at(sinksrc).ln - (K-1) + 2;
+                            C_bracketed+= unitigs.at(sinksrc).ln - (K-1) + 2;
+                            //newToOld[whichwalk].insert(newToOld[whichwalk].end(), sinksrc);
+                            //cout<<whichwalk<<": after size: "<<newToOld[whichwalk].size()<< " ->"<<newToOld[whichwalk].front();
+                            //cout<<endl;
+                        }else{
+                            ///*
+                            //else sink/src to right
+                            color[sinksrc] = 'r';
+                            oldToNew[sinksrc].serial = whichwalk;
+                            nodeSign[sinksrc] = !e.left;
+                            
+                            C_new+= unitigs.at(sinksrc).ln - (K-1) + 2;
+                            C_bracketed+= unitigs.at(sinksrc).ln - (K-1) + 2;
+                            
+                            std::list<int>::iterator it;
+                            
+                            //it = find (newToOld[whichwalk].begin(), newToOld[whichwalk].end(), e.toNode);
+                            //advance(it, 1);
+                            //newToOld[whichwalk].insert(newToOld[whichwalk].end(), sinksrc);
+                             //*/
+                        }
+                        
+                    }
+                    
+                    
+                    
+                    
+                    
+                    
+                  
+                    
+                }
+                if(color[sinksrc] == 'w'){
+                    list<int> xxx;
+                    xxx.push_back(sinksrc);
+                    newToOld.push_back(xxx);
+                    oldToNew[sinksrc].serial = countNewNode++;
+                }
+                
+            }
+                
+            
+        }
+        
+        
+        
+        
+        
         cout<<"## START stitching strings: "<<endl;
         time_a = readTimer();
+        
+        vector<pair<string, int>> ins;
         //fix sequences
         for(int i = 0; i< countNewNode; i++){
             string s = "";
             for(int x: newToOld[i]){
-                if(nodeSign[x] == false){
-                    s = plus_strings(s, reverseComplement(unitigs.at(x).sequence), K);
-                }else{
-                    s = plus_strings(s, (unitigs.at(x).sequence), K);
+                if(color[x] != 'l' && color[x] != 'r' ){
+                    if(nodeSign[x] == false){
+                        s = plus_strings(s, reverseComplement(unitigs.at(x).sequence), K);
+                    }else{
+                        s = plus_strings(s, (unitigs.at(x).sequence), K);
+                    }
                 }
+                if(color[x] == 'T'){
+                    
+                    string b;
+                    if(nodeSign[x] == false){
+                        b =  reverseComplement(unitigs.at(x).sequence);
+                    }else{
+                        b =  (unitigs.at(x).sequence);
+                    }
+                     string ret = "[" + b.substr(0, b.length() - (K - 1)) + "]" ;
+                    //s+=ret;
+                    ins.push_back(make_pair(ret, s.length()));
+                }
+                if(color[x] == 'U'){
+                    string b;
+                    if(nodeSign[x] == false){
+                        b =  reverseComplement(unitigs.at(x).sequence);
+                    }else{
+                        b =  (unitigs.at(x).sequence);
+                    }
+                    string ret = "]" + b.substr(K - 1, b.length() - (K - 1)) + "[" ;
+                    ins.push_back(make_pair(ret, s.length()));
+                }
+                
+            }
+            
+            int offset = 0;
+            for(auto p:ins){
+                //s = s.substr(0, p.second + offset) + p.first + s.substr(p.second + offset, s.length()-p.second - offset) ;
+                //offset += p.first.length();
+                C_new +=p.first.length();
+                C_bracketed +=p.first.length();
             }
             newSequences[i] = s;
             
@@ -993,6 +1145,7 @@ public:
             }
            
             C_new += s.length();
+            C_bracketed += s.length();
         }
         cout<<"TIME to stitch: "<<readTimer() - time_a<<" sec."<<endl;
         
@@ -1007,208 +1160,105 @@ public:
         
         
         /***MERGE START***/
-        ofstream betterfile;
-        betterfile.open("stitchedUnitigs.fa");
-        
-        ofstream betterfilePlain;
-        betterfilePlain.open("plainOutput.txt");
-        
-        
-        for ( const auto& p: gmerge.fwdWalkId)
-        {
-            if(gmerge.fwdVisited[p.first] == false){
-                
-                int fromnode =p.first;
-                int tonode = p.second;
-                deque<int> lst;
-                
-                lst.push_back(fromnode);
-                lst.push_back(tonode);
-                
-                gmerge.fwdVisited[fromnode] = true;
-                gmerge.bwdVisited[tonode] = true;
-                
-                
-                if(gmerge.fwdVisited.count(tonode)>0){
-                    while(gmerge.fwdVisited[tonode] == false){
-                        gmerge.fwdVisited[tonode] = true;
-                        tonode = gmerge.fwdWalkId[tonode];
-                        gmerge.bwdVisited[tonode] = true;
-                        
-                        lst.push_back(tonode);
-                        if(gmerge.fwdVisited.count(tonode)==0)
-                            break;
-                    }
-                }
-                if(gmerge.bwdVisited.count(fromnode)>0){
-                    while(gmerge.bwdVisited[fromnode] == false){
-                        gmerge.bwdVisited[fromnode] = true;
-                        fromnode = gmerge.bwdWalkId[fromnode];
-                        gmerge.fwdVisited[fromnode] = true;
-                        
-                        lst.push_front(fromnode);
-                        if(gmerge.bwdVisited.count(fromnode)==0)
-                            break;
-                    }
-                }
-                
-                string mergeString = "";
-                
-                int headOfThisWalk = walkFirstNode[lst.at(0)]; //CHECK AGAIN
-                for(auto i: lst){
-                    // i is new walk id before merging
-                    merged[i] = true;
-                    mergeString = plus_strings(mergeString, newSequences[i], K);
-                    walkFirstNode[i] = headOfThisWalk;
-                    
-                    //cout<<i<<" ";
-                }
+        if(ALGOMODE == TWOWAYEXT){
+            ofstream betterfile;
+            betterfile.open("stitchedUnitigs"+modefilename[ALGOMODE]+".fa");
             
-                newNewSequences[headOfThisWalk] = mergeString;
-                
-                
-                //cout<<endl;
-                Vcounttttt ++;
-                C_better+=mergeString.length();
-                betterfile << '>' << fromnode <<" LN:i:"<<mergeString.length()<<" ";
-                betterfile<<endl;
-                
-                betterfile<<mergeString;
-                betterfilePlain<<mergeString;
-                
-                betterfile<<endl;
-                betterfilePlain<<endl;
-                
-                
+            ofstream betterfilePlain;
+            betterfilePlain.open("plainOutput"+modefilename[ALGOMODE]+".txt");
+            
+            
+            for ( const auto& p: gmerge.fwdWalkId)
+            {
+                if(gmerge.fwdVisited[p.first] == false){
+                    
+                    int fromnode =p.first;
+                    int tonode = p.second;
+                    deque<int> lst;
+                    
+                    lst.push_back(fromnode);
+                    lst.push_back(tonode);
+                    
+                    gmerge.fwdVisited[fromnode] = true;
+                    gmerge.bwdVisited[tonode] = true;
+                    
+                    
+                    if(gmerge.fwdVisited.count(tonode)>0){
+                        while(gmerge.fwdVisited[tonode] == false){
+                            gmerge.fwdVisited[tonode] = true;
+                            tonode = gmerge.fwdWalkId[tonode];
+                            gmerge.bwdVisited[tonode] = true;
+                            
+                            lst.push_back(tonode);
+                            if(gmerge.fwdVisited.count(tonode)==0)
+                                break;
+                        }
+                    }
+                    if(gmerge.bwdVisited.count(fromnode)>0){
+                        while(gmerge.bwdVisited[fromnode] == false){
+                            gmerge.bwdVisited[fromnode] = true;
+                            fromnode = gmerge.bwdWalkId[fromnode];
+                            gmerge.fwdVisited[fromnode] = true;
+                            
+                            lst.push_front(fromnode);
+                            if(gmerge.bwdVisited.count(fromnode)==0)
+                                break;
+                        }
+                    }
+                    
+                    string mergeString = "";
+                    
+                    int headOfThisWalk = walkFirstNode[lst.at(0)]; //CHECK AGAIN
+                    for(auto i: lst){
+                        // i is new walk id before merging
+                        merged[i] = true;
+                        mergeString = plus_strings(mergeString, newSequences[i], K);
+                        walkFirstNode[i] = headOfThisWalk;
+                        
+                        //cout<<i<<" ";
+                    }
+                    
+                    newNewSequences[headOfThisWalk] = mergeString;
+                    
+                    
+                    //cout<<endl;
+                    V_twoway ++;
+                    C_twoway+=mergeString.length();
+                    betterfile << '>' << fromnode <<" LN:i:"<<mergeString.length()<<" ";
+                    betterfile<<endl;
+                    
+                    betterfile<<mergeString;
+                    betterfilePlain<<mergeString;
+                    
+                    betterfile<<endl;
+                    betterfilePlain<<endl;
+                    
+                    
+                }
             }
-        }
-        
-        
-        
-        for (int newNodeNum = 0; newNodeNum<countNewNode; newNodeNum++){
-            if(merged[newNodeNum] == false){
-                betterfile << '>' << newNodeNum <<" LN:i:"<<newSequences[newNodeNum].length()<<" ";
-                betterfile<<endl;
-                
-                betterfile<<newSequences[newNodeNum];
-                betterfilePlain<<newSequences[newNodeNum];
-                
-                betterfile<<endl;
-                betterfilePlain<<endl;
-                
-                C_better+=newSequences[newNodeNum].length();
-                Vcounttttt++;
+            for (int newNodeNum = 0; newNodeNum<countNewNode; newNodeNum++){
+                if(merged[newNodeNum] == false){
+                    betterfile << '>' << newNodeNum <<" LN:i:"<<newSequences[newNodeNum].length()<<" ";
+                    betterfile<<endl;
+                    
+                    betterfile<<newSequences[newNodeNum];
+                    betterfilePlain<<newSequences[newNodeNum];
+                    
+                    betterfile<<endl;
+                    betterfilePlain<<endl;
+                    
+                    C_twoway+=newSequences[newNodeNum].length();
+                    V_twoway++;
+                }
             }
+            betterfile.close();
         }
-        betterfile.close();
         delete[] merged;
         delete []  global_issinksource;
         delete []  global_priority;
-        
-        
-        
-        //@@@@@ BRACKETED
-        if(ALGOMODE == BRACKETCOMP){
-            string plainOutput = "bracketedPlainOutput.txt";
-            ofstream plainfile;
-            plainfile.open(plainOutput);
-            //vector <string> bracketedStrings;
-            for (auto const& x : sinkSrcEdges)
-            {
-                vector<string> strs;
-                int sinksrc = x.first;
-                string bracketed = unitigs.at(sinksrc).sequence;
-                
-                
-               
-                /*
-                for(edge_t e: x.second){
-                    //if this is a walk starting vertex
-                    if(walkFirstNode[oldToNew[e.toNode].serial] == e.toNode && newNewMarker.count(e.toNode) == 0){
-                        
-                        if(nodeSign[e.toNode] == e.right){
-                            strs.push_back(newNewSequences[e.toNode]);
-                            newNewMarker.insert(e.toNode);
-                        }
-                        
-                        
-                    }
-                }
-                */
-                
-                
-                if(strs.size()>1){
-                    for(string s: strs){
-                        bracketed += "|" + s.substr(K - 1, s.length() - (K - 1)); //start from k-1
-                    }
-                }
-                if(strs.size()==1){
-                    bracketed +=strs.at(0);
-                }
-                if(strs.size()==0){
-                }
-                //bracketedStrings.push_back(bracketed);
-                plainfile<<bracketed;
-                C_bracketed+=bracketed.length();
-                plainfile<<endl;
-            }
-            
-            
-            for (pair<int, string> element : newNewSequences) {
-                int x = element.first;  // unitig id of walk starting vertex
-               // if(newNewMarker.count(x)==0 && walkFirstNode[oldToNew[x].serial] == x){
-                 if(newNewMarker.count(x)==0 && walkFirstNode[oldToNew[x].serial] == x){
-                    plainfile<<newNewSequences[x];
-                    C_bracketed+=newNewSequences[x].length();
-                    plainfile<<endl;
-                }
-            }
-            plainfile.close();
-        }
-        
-        
-        /*
-        for (edge_both_t e : resolveLaterEdges) {
-            // e.start -> e.end : they have different newHome
-            // look at the sign of both end points. if from sign and edge from are not equal, then revert the edge label
-            // We consider that ACT and CTT has an edge.
-            // ACT(+)  (+)->(-)  AAG(+) : this is fine, just add the edge
-            // ACT(-)  (+)->(-)  AAG(+) : you need to convert it, because => AGT  (+)->(-)  AAG => this is not correct:
-            // to fix this AGT (-)->(-) AAG
-            // don't touch the node sign: just fix the edge signs
-            
-            int x = e.fromNode;
-            int u = unitigs.at(x).ln;
-            newEdge_t newEdge;
-            newEdge.kmerEndIndex = oldToNew[e.edge.toNode].startPos;
-            newEdge.kmerStartIndex = oldToNew[x].endPos;
-            
-            if(e.fromNode!=e.edge.toNode) {
-                if (nodeSign[e.fromNode] != e.edge.left) {
-                    e.edge.left = !e.edge.left;
-                    newEdge.kmerStartIndex = oldToNew[x].startPos;
-                }
-                if (nodeSign[e.edge.toNode] != e.edge.right) {
-                    e.edge.right = !e.edge.right;
-                    newEdge.kmerEndIndex = oldToNew[e.edge.toNode].endPos;
-                }
-            }
-            
-            
-            newEdge.edge = e.edge;
-            newEdge.edge.toNode = oldToNew[newEdge.edge.toNode].serial;
-            
-            newAdjList[oldToNew[x].serial].push_back(newEdge);
-            
-            if(DBGFLAG == OLDNEWMAP){
-                cout << "old: " << x << "->" << e.edge.toNode << ", new:" << " (" << oldToNew[x].serial << "->" << newEdge.edge.toNode << ")" << endl;
-                
-            }
-        }
-         */
+
     }
-    
-    
+
     ~Graph() {
         delete [] color;
         delete [] p;
@@ -1245,11 +1295,11 @@ void printNewGraph(Graph &G){
 
 
 void formattedOutputForwardExt(Graph &G){
-    string plainOutput = "plainOutputFwd.txt";
+    string plainOutput = "plainOutput"+modefilename[ALGOMODE]+".txt";
     ofstream plainfile;
     plainfile.open(plainOutput);
     
-    string stitchedUnitigs = "stitchedUnitigsFwd.fa";
+    string stitchedUnitigs = "stitchedUnitigs"+modefilename[ALGOMODE]+".fa";
     ofstream myfile;
     myfile.open (stitchedUnitigs);
     //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
@@ -1488,11 +1538,11 @@ void makeGraphDot(string ipstr){
 
 int main(int argc, char** argv) {
     FILE * statFile;
-    statFile = fopen ("stats.txt","w");
+    statFile = fopen (("stats"+modefilename[ALGOMODE]+".txt").c_str(),"w");
 
-    string debugFileName = "debug.txt";
-    ofstream debugFile;
-    debugFile.open(debugFileName);
+//    string debugFileName = "debug.txt";
+//    ofstream debugFile;
+//    debugFile.open(debugFileName);
     
     
     const char* nvalue = "" ;
@@ -1569,6 +1619,7 @@ int main(int argc, char** argv) {
     if (EXIT_FAILURE == get_data(UNITIG_FILE, data, unitigs, char_count)) {
         return EXIT_FAILURE;
     }
+    infile.close();
     double TIME_READ_SEC = readTimer() - startTime;
     cout<<"TIME to read file "<<TIME_READ_SEC<<" sec."<<endl;
     
@@ -1625,7 +1676,7 @@ int main(int argc, char** argv) {
     int charLowerbound = C-(K-1)*(G.V - walkstarting_node_count*1.0);
     float upperbound = (1-((C-(K-1)*(G.V - walkstarting_node_count*1.0))/C))*100.0;
     
-    fprintf(statFile, "%d\t\
+    printf( "%d\t\
            %d\t\
            %d\t\
            %d\t\
@@ -1654,9 +1705,9 @@ int main(int argc, char** argv) {
            );
     
     for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
-        fprintf(statFile, "%.2f%%\t", (i->second)*100.0/V);
+        printf("%.2f%%\t", (i->second)*100.0/V);
     }
-    fprintf(statFile, "%.2f%%\t\
+    printf("%.2f%%\t\
            %.2f%%\t",
            isolated_node_count*100.0/V,
            (sink_count+source_count)*100.0/V);
@@ -1668,7 +1719,7 @@ int main(int argc, char** argv) {
 //    }
     
     if(ALGOMODE == PROFILE_ONLY){
-        fprintf(statFile, "\n");
+        printf("\n");
         return 0;
     }
 
@@ -1718,37 +1769,48 @@ int main(int argc, char** argv) {
     
     
     time_a = readTimer();
-    formattedOutputForwardExt(G);
-    cout<<"TIME to output: "<<readTimer() - time_a<<" sec."<<endl;
     
     
     if(ALGOMODE==BRACKETCOMP){
-        C_better = C_bracketed;
+        formattedOutputForwardExt(G);
+        C_new = C_bracketed;
+        //V_new  = V_bracketed;
+        V_new = G.countNewNode;
     }else if(ALGOMODE == TWOWAYEXT){
-        //C_better = C_better;
+        V_new = V_twoway;
+        C_new = C_twoway;
     }else if(ALGOMODE == BASIC){
-        C_better = C_new;
+        formattedOutputForwardExt(G);
+        V_new = G.countNewNode;
+        //C_new = C_new;
+    }else{
+        formattedOutputForwardExt(G);
+        V_new = G.countNewNode;
+        //C_new = C_new;
     }
     
+    cout<<"TIME to output: "<<readTimer() - time_a<<" sec."<<endl;
     
-    float percent_saved_c = (1-(C_better*1.0/C))*100.0;
-   float theoreticalBitsKmerSaved =C_better*2.0/numKmers;
     
-    fprintf(statFile, "%s\t",  mapmode[ALGOMODE].c_str());
-    fprintf(statFile, "%d\t\
-           %d\t\
+    
+    
+    
+   float percent_saved_c = (1-(C_new*1.0/C))*100.0;
+   float theoreticalBitsKmerSaved =C_new*2.0/numKmers;
+    
+    printf("%s\t",  mapmode[ALGOMODE].c_str());
+    printf("%d\t\
             %.2f%%\t\
             %.2f%%\t\
            %d\t\
            %.2f\t",
-           K,
-           Vcounttttt,
+           V_new,
            percent_saved_c,
             upperbound - percent_saved_c,
-           C_better,
+           C_new,
            theoreticalBitsKmerSaved
             );
-    fprintf(statFile, "%.2f\t\
+    printf("%.2f\t\
            %.2f\t",
            TIME_READ_SEC,
            TIME_TOTAL_SEC
@@ -1757,10 +1819,9 @@ int main(int argc, char** argv) {
 //           %.2f\t",
 //           getFileSizeKB().first*1.0/numKmers*1024*8,
 //           getFileSizeKB().second*1.0/numKmers*1024*8);
-    fprintf(statFile, "\n");
-    fprintf(statFile, "\n");
+    printf("\n");
+    printf("\n");
     
     fclose(statFile);
-    system("cat stats.txt");
     return EXIT_SUCCESS;
 }
