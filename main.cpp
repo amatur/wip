@@ -26,8 +26,22 @@
 #include <queue>
 #include <deque>
 #include <unistd.h>
+#include <tuple>
+
 
 using namespace std;
+
+typedef tuple<int,int,int, int> mytuple; // uid, walkid, pos, isTip
+
+bool sort_by_walkId (const mytuple &lhs, const mytuple &rhs){
+    return get<1>(lhs) < get<1>(rhs);
+}
+bool sort_by_pos (const mytuple &lhs, const mytuple &rhs){
+    return get<2>(lhs) < get<2>(rhs);
+}
+bool sort_by_tipstatus (const mytuple &lhs, const mytuple &rhs){
+    return get<3>(lhs) < get<3>(rhs);
+}
 
 int K = 55;
 string UNITIG_FILE = "/Volumes/exFAT/data2019/chol/55/list_reads.unitigs.fa";
@@ -55,10 +69,16 @@ string modefilename[] = {"Fwd", "indegree_dfs", "indegree_dfs_initial_sort_only"
 
 typedef unsigned char uchar;
 
+
+
 typedef struct {
-    int serial;
-    int startPos;
-    int endPos;
+    int serial = -1;
+    int startPosWithKOverlap;
+    int endPosWithKOVerlap;
+    bool isWalkEnd = false;
+    int pos_in_walk = -1;
+    int finalWalkId = -1; // renders some walkId as invalid
+    int isTip = 0;
 } new_node_info_t;
 
 typedef struct {
@@ -291,7 +311,7 @@ public:
         
         for (int i = 0; i < V; i++) {
             
-            if(ALGOMODE == TWOWAYEXT){
+            if(ALGOMODE == TWOWAYEXT || ALGOMODE == BRACKETCOMP ){
                 disSet.make_set(i);
             }
             
@@ -600,6 +620,8 @@ public:
                     xxx.push_back(x);
                     newToOld.push_back(xxx);
                     oldToNew[x].serial = countNewNode++; // countNewNode starts at 0, then keeps increasing
+                    oldToNew[x].finalWalkId = oldToNew[x].serial;
+                    
                     
                     //added while doing bracket comp
                     walkFirstNode.push_back(x);
@@ -618,36 +640,38 @@ public:
                         //newNewSequences[x] = (unitigs.at(x).sequence);
                     }
                     
-                    
-                    oldToNew[x].startPos = 1;
+                    oldToNew[x].pos_in_walk = 1;
+                    oldToNew[x].startPosWithKOverlap = 1;
                     if (u < K) {
-                        oldToNew[x].endPos = 1; // do we actually see this? yes
+                        oldToNew[x].endPosWithKOVerlap = 1; // do we actually see this? yes
                         if(DBGFLAG == UKDEBUG){
                             cout<< "node: "<< x<<"u< k ***** u = "<<u<<endl;
                         }
                     } else {
-                        oldToNew[x].endPos = u - K + 1;
+                        oldToNew[x].endPosWithKOVerlap = u - K + 1;
                     }
                     
                 } else {
                     
                     newToOld[oldToNew[p[x]].serial].push_back(x);
                     oldToNew[x].serial = oldToNew[p[x]].serial;
+                    oldToNew[x].finalWalkId = oldToNew[x].serial;
                     
                     
-                    if(ALGOMODE==TWOWAYEXT){
+                    if(ALGOMODE==TWOWAYEXT || ALGOMODE==BRACKETCOMP ){
                         disSet.Union(x, p[x]);
                     }
                     
                     
-                    oldToNew[x].startPos = oldToNew[p[x]].endPos + 1;
+                    oldToNew[x].startPosWithKOverlap = oldToNew[p[x]].endPosWithKOVerlap + 1;
+                    oldToNew[x].pos_in_walk = oldToNew[p[x]].pos_in_walk + 1;
                     if (u < K) {
-                        oldToNew[x].endPos = oldToNew[x].startPos + 1; // do we actually see this? yes
+                        oldToNew[x].endPosWithKOVerlap = oldToNew[x].startPosWithKOverlap + 1; // do we actually see this? yes
                         if(DBGFLAG == UKDEBUG){
                             cout<< "node: "<< x<<"u< k ***** u = "<<u<<endl;
                         }
                     } else {
-                        oldToNew[x].endPos = u - K + (oldToNew[x].startPos); //check correctness
+                        oldToNew[x].endPosWithKOVerlap = u - K + (oldToNew[x].startPosWithKOverlap); //check correctness
                     }
                     
                     // x says: Now that I know where my newHome is: I can extend my parent's sequence
@@ -756,7 +780,7 @@ public:
                         } else {
                             
                             //merger
-                            if(ALGOMODE == TWOWAYEXT){
+                            if(ALGOMODE == TWOWAYEXT || ALGOMODE == BRACKETCOMP){
                                 // y is not white
                                 bool consistentEdge = (nodeSign[y] == yEdge.right && (p[x]==-1 || (p[x]!=-1&& nodeSign[x] == yEdge.left)) );
                                 if(p[y]==-1 && consistentEdge && oldToNew[x].serial != oldToNew[y].serial){
@@ -978,166 +1002,22 @@ public:
 
         
         
-        
-        //@@@@@ BRACKETED
-        if(ALGOMODE == BRACKETCOMP){
-            for (auto const& x : sinkSrcEdges)
-            {
-                int sinksrc = x.first;
-        
-                string bracketed = unitigs.at(sinksrc).sequence;
-                
-                
-                for(edge_t e: x.second){
-                    if(color[sinksrc] != 'w'){
-                        break;
-                    }
-                    
-                    if(nodeSign[e.toNode] == e.right && color[e.toNode]!='w'){
-                        //if this is a walk starting vertex
-                        //which walk?
-                        int whichwalk = oldToNew[e.toNode].serial;
-                        //case 1 a
-                        if(walkFirstNode[oldToNew[e.toNode].serial] == e.toNode){
-                            color[sinksrc] = 'b';
-                            oldToNew[sinksrc].serial = whichwalk;
-                            
-                            nodeSign[sinksrc] = e.left;
-                            //cout<<whichwalk<<": before size: "<<newToOld[whichwalk].size()<< " ->"<<newToOld[whichwalk].front();
-                            newToOld[whichwalk].insert(newToOld[whichwalk].begin(), sinksrc);
-                            //cout<<whichwalk<<": after size: "<<newToOld[whichwalk].size()<< " ->"<<newToOld[whichwalk].front();
-                            //cout<<endl;
-                        }else{
-                            
-                             //else sink/src to left
-                            color[sinksrc] = 'l';
-                            oldToNew[sinksrc].serial = whichwalk;
-                            nodeSign[sinksrc] = e.left;
-                            newToOld[whichwalk].insert(newToOld[whichwalk].end(), sinksrc);
-                            /*
-                            std::list<int>::iterator it;
-                            
-                            it = find (newToOld[whichwalk].begin(), newToOld[whichwalk].end(), e.toNode);
-                            newToOld[whichwalk].insert(it, sinksrc);
-                            */
-                        }
-                       
-                        
-                        
-                    }
-                    
-                    if(nodeSign[e.toNode] != e.right && color[e.toNode]!='w'){
-                        //if this is a walk starting vertex
-                        //which walk?
-                        int whichwalk = oldToNew[e.toNode].serial;
-
-                        
-                        //if this is a walk ending vertex
-                        //walksize of vertex e.toNode
-                        size_t walksize = newToOld[whichwalk].size();
-                        if(newToOld[whichwalk].back() == e.toNode){
-                            color[sinksrc] = 'b';
-                            oldToNew[sinksrc].serial = whichwalk;
-                            
-                            nodeSign[sinksrc] = !e.left;
-                            //cout<<whichwalk<<": before size: "<<newToOld[whichwalk].size()<< " ->"<<newToOld[whichwalk].front();
-                            
-                            C_new+= unitigs.at(sinksrc).ln - (K-1) + 2;
-                            C_bracketed+= unitigs.at(sinksrc).ln - (K-1) + 2;
-                            //newToOld[whichwalk].insert(newToOld[whichwalk].end(), sinksrc);
-                            //cout<<whichwalk<<": after size: "<<newToOld[whichwalk].size()<< " ->"<<newToOld[whichwalk].front();
-                            //cout<<endl;
-                        }else{
-                            ///*
-                            //else sink/src to right
-                            color[sinksrc] = 'r';
-                            oldToNew[sinksrc].serial = whichwalk;
-                            nodeSign[sinksrc] = !e.left;
-                            
-                            C_new+= unitigs.at(sinksrc).ln - (K-1) + 2;
-                            C_bracketed+= unitigs.at(sinksrc).ln - (K-1) + 2;
-                            
-                            std::list<int>::iterator it;
-                            
-                            //it = find (newToOld[whichwalk].begin(), newToOld[whichwalk].end(), e.toNode);
-                            //advance(it, 1);
-                            //newToOld[whichwalk].insert(newToOld[whichwalk].end(), sinksrc);
-                             //*/
-                        }
-                        
-                    }
-                    
-                    
-                    
-                    
-                    
-                    
-                  
-                    
-                }
-                if(color[sinksrc] == 'w'){
-                    list<int> xxx;
-                    xxx.push_back(sinksrc);
-                    newToOld.push_back(xxx);
-                    oldToNew[sinksrc].serial = countNewNode++;
-                }
-                
-            }
-                
-            
-        }
-        
-        
-        
-        
-        
         cout<<"## START stitching strings: "<<endl;
         time_a = readTimer();
         
-        vector<pair<string, int>> ins;
         //fix sequences
         for(int i = 0; i< countNewNode; i++){
             string s = "";
             for(int x: newToOld[i]){
-                if(color[x] != 'l' && color[x] != 'r' ){
+                if(color[x] != 'l' && color[x] != 'r' ){ // useless in normal code
                     if(nodeSign[x] == false){
                         s = plus_strings(s, reverseComplement(unitigs.at(x).sequence), K);
                     }else{
                         s = plus_strings(s, (unitigs.at(x).sequence), K);
                     }
                 }
-                if(color[x] == 'T'){
-                    
-                    string b;
-                    if(nodeSign[x] == false){
-                        b =  reverseComplement(unitigs.at(x).sequence);
-                    }else{
-                        b =  (unitigs.at(x).sequence);
-                    }
-                     string ret = "[" + b.substr(0, b.length() - (K - 1)) + "]" ;
-                    //s+=ret;
-                    ins.push_back(make_pair(ret, s.length()));
-                }
-                if(color[x] == 'U'){
-                    string b;
-                    if(nodeSign[x] == false){
-                        b =  reverseComplement(unitigs.at(x).sequence);
-                    }else{
-                        b =  (unitigs.at(x).sequence);
-                    }
-                    string ret = "]" + b.substr(K - 1, b.length() - (K - 1)) + "[" ;
-                    ins.push_back(make_pair(ret, s.length()));
-                }
-                
             }
             
-            int offset = 0;
-            for(auto p:ins){
-                //s = s.substr(0, p.second + offset) + p.first + s.substr(p.second + offset, s.length()-p.second - offset) ;
-                //offset += p.first.length();
-                C_new +=p.first.length();
-                C_bracketed +=p.first.length();
-            }
             newSequences[i] = s;
             
             for(int x: newToOld[i]){
@@ -1145,7 +1025,6 @@ public:
             }
            
             C_new += s.length();
-            C_bracketed += s.length();
         }
         cout<<"TIME to stitch: "<<readTimer() - time_a<<" sec."<<endl;
         
@@ -1160,7 +1039,7 @@ public:
         
         
         /***MERGE START***/
-        if(ALGOMODE == TWOWAYEXT){
+        if(ALGOMODE == TWOWAYEXT || ALGOMODE == BRACKETCOMP){
             ofstream betterfile;
             betterfile.open("stitchedUnitigs"+modefilename[ALGOMODE]+".fa");
             
@@ -1209,14 +1088,27 @@ public:
                     string mergeString = "";
                     
                     int headOfThisWalk = walkFirstNode[lst.at(0)]; //CHECK AGAIN
+                    assert(!lst.empty());
+                    int commonWalkId = lst.at(0);
+                    
+                    int posOffset = 1;
                     for(auto i: lst){
                         // i is new walk id before merging
                         merged[i] = true;
                         mergeString = plus_strings(mergeString, newSequences[i], K);
                         walkFirstNode[i] = headOfThisWalk;
                         
-                        //cout<<i<<" ";
+                        // travesing the walk list of walk ID i
+                        for(int uid: newToOld[i]){
+                            oldToNew[uid].serial = commonWalkId;
+                            oldToNew[uid].finalWalkId = commonWalkId;
+                            oldToNew[uid].pos_in_walk = posOffset++;
+                            
+                        }
+                        oldToNew[newToOld[i].back()].isWalkEnd = true;
+                        
                     }
+                    
                     
                     newNewSequences[headOfThisWalk] = mergeString;
                     
@@ -1224,7 +1116,7 @@ public:
                     //cout<<endl;
                     V_twoway ++;
                     C_twoway+=mergeString.length();
-                    betterfile << '>' << fromnode <<" LN:i:"<<mergeString.length()<<" ";
+                    betterfile << '>' << commonWalkId <<" LN:i:"<<mergeString.length()<<" ";
                     betterfile<<endl;
                     
                     betterfile<<mergeString;
@@ -1237,7 +1129,12 @@ public:
                 }
             }
             for (int newNodeNum = 0; newNodeNum<countNewNode; newNodeNum++){
+                
+                
                 if(merged[newNodeNum] == false){
+                    oldToNew[newToOld[newNodeNum].back()].isWalkEnd = true;
+                    
+                    
                     betterfile << '>' << newNodeNum <<" LN:i:"<<newSequences[newNodeNum].length()<<" ";
                     betterfile<<endl;
                     
@@ -1253,6 +1150,203 @@ public:
             }
             betterfile.close();
         }
+        
+        
+        /// TWOWAYEXT DONE: NOW LET"S DO BRACK COMP
+        
+        
+        bool* hasSinkconn = new bool[V];
+        for (int i = 0; i<V; i++) {
+            hasSinkconn[i] = false;
+        }
+        //@@@@@ BRACKETED
+        if(ALGOMODE == BRACKETCOMP ){
+            for (auto const& x : sinkSrcEdges)
+            {
+                int sinksrc = x.first;
+                for(edge_t e: x.second){
+                    
+                    // can this occur?
+                    if(color[sinksrc] != 'w'){
+                        break;
+                    }
+                    //there are 3 cases
+                    //if consistent this way [[[if(nodeSign[e.toNode] == e.right)]]]
+                    //case fwd1: sinksrc -> contig start
+                    //case fwd2. sinksrc -> contig middle/end -> ... (say that sinksrc is LEFT)
+                    //case fwd3. sinksrc -> sinksrc_other (i'd say ignore this for now)
+                    //
+                    
+                    //case bwd1. contig end -> sinksrc
+                    //case bwd2. .... -> contig middle/start -> sinksrc (say that sinksrc is RIGHT)
+                    //case bwd3. sinksrc_other -> sinksrc  (i'd say ignore this for now)
+                    
+                    // 3 fwd cases
+                    if(nodeSign[e.toNode] == e.right){  //ensure it is a fwd case
+                        if(color[e.toNode]!='w' && color[e.toNode]!='r' && color[e.toNode]!='l'){//  this ensures that this to vertex is NOT sinksrc_other
+                            //case 1, 2
+                            int whichwalk = oldToNew[e.toNode].finalWalkId;
+                            //*** case fwd1 : sinksrc -> contigStart
+                            //case fwd2. sinksrc -> contig middle/end -> ... (say that sinksrc is LEFT)
+                            //let's merge case fwd1 & fwd2
+                            //color[sinksrc] = 'b';
+                            
+                            nodeSign[sinksrc] = e.left;
+                            color[sinksrc] = 'l';
+                            oldToNew[sinksrc].serial = whichwalk;
+                            oldToNew[sinksrc].finalWalkId = whichwalk;
+                            oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk - 1;
+                            
+                            oldToNew[sinksrc].isTip = 2; // from left
+                            /*
+                            if(oldToNew[e.toNode].pos_in_walk == 1 && hasSinkconn[e.toNode] ){
+                                oldToNew[sinksrc].isTip = 0;
+                                hasSinkconn[e.toNode] = true;
+                            }else{
+                                oldToNew[sinksrc].isTip = 2;
+                            }*/
+                            
+                            
+                            
+                            
+                            //fwd1
+                            //newToOld[whichwalk].insert(newToOld[whichwalk].begin(), sinksrc);
+                            //fwd2
+                            //std::list<int>::iterator it;
+                            //it = find (newToOld[whichwalk].begin(), newToOld[whichwalk].end(), e.toNode);
+                            //newToOld[whichwalk].insert(it, sinksrc);
+                       
+                        }
+                        
+                    }else{
+                        // 3 bwd cases
+                        
+                        if(color[e.toNode]!='w' && color[e.toNode]!='r' && color[e.toNode]!='l'){
+                            int whichwalk = oldToNew[e.toNode].finalWalkId;
+                            
+                            //*** case bwd1: contigend --> sinksrc
+                            //*** case bwd2: contigmiddle--> sinksrc
+                            
+                            
+                            nodeSign[sinksrc] = !e.left;
+                            //color[sinksrc] = 'b';
+                            color[sinksrc] = 'r';
+                            oldToNew[sinksrc].serial = whichwalk;
+                            oldToNew[sinksrc].finalWalkId = whichwalk;
+                            oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk + 1;
+                            
+                            /*
+                            if(oldToNew[e.toNode].isWalkEnd == true && !hasSinkconn[e.toNode] ){
+                                oldToNew[sinksrc].isTip = 0;
+                                hasSinkconn[e.toNode] = true;
+                            }else{
+                                oldToNew[sinksrc].isTip = 1;
+                            }*/
+                            oldToNew[sinksrc].isTip = 1; //from right
+                            
+                            //C_new+= unitigs.at(sinksrc).ln - (K-1) + 2;
+                            //C_bracketed+= unitigs.at(sinksrc).ln - (K-1) + 2;
+                            //newToOld[whichwalk].insert(newToOld[whichwalk].end(), sinksrc);
+                            
+                        }
+                    }
+                }
+            }
+            
+            // now take care of all the remaining edges
+            for (auto const& x : sinkSrcEdges)
+            {
+                int sinksrc = x.first;
+                if(color[sinksrc] == 'w'){  //still white, that means it goes isolated now
+                    list<int> xxx;
+                    xxx.push_back(sinksrc);
+                    newToOld.push_back(xxx);
+                    oldToNew[sinksrc].serial = countNewNode++;
+                    oldToNew[sinksrc].finalWalkId = oldToNew[sinksrc].serial;
+                    oldToNew[sinksrc].pos_in_walk = 1;
+                }
+            }
+            
+            
+            //BRACKETCOMP encoder and printer::::
+            vector<mytuple> sorter;
+            for(int uid = 0 ; uid< V; uid++){
+                new_node_info_t nd = oldToNew[uid];
+                //if(!global_issinksource[uid]){
+                    sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
+                //}
+                
+            }
+            stable_sort(sorter.begin(),sorter.end(),sort_by_tipstatus);
+            stable_sort(sorter.begin(),sorter.end(),sort_by_pos);
+            stable_sort(sorter.begin(),sorter.end(),sort_by_walkId);
+            
+            /// START OUTPUTTING
+            ofstream tipFile;
+            tipFile.open("tipOutput.txt");
+            
+            int lastWalk = -1;
+            string walkString = "";
+            
+            for(mytuple n : sorter){
+                int uid = get<0>(n);
+                int finalWalkId = get<1>(n);
+                int pos_in_walk = get<2>(n);
+                int isTip = get<3>(n);
+                cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
+                string unitigString;
+                if(finalWalkId!=lastWalk){
+                    if(lastWalk != -1){
+                        //print previous walk
+                        tipFile<< '>' << lastWalk << "\n" ;
+                        V_bracketed++;
+                        C_bracketed+=walkString.length();
+                        tipFile<< walkString;
+                        tipFile<<endl;
+                        //cout<<endl;
+                    }
+                    
+                    //start a new walk
+                   // cout<<"Walk: (" <<finalWalkId<<" ) = ";
+                    walkString = "";
+                    lastWalk = finalWalkId;
+                    
+                }else{
+                    //cout<<pos_in_walk<<" ";
+                }
+                
+                if(nodeSign[uid] == false){
+                    unitigString =  reverseComplement(unitigs.at(uid).sequence);
+                }else{
+                    unitigString =  (unitigs.at(uid).sequence);
+                }
+                
+               
+                if(isTip == 0){
+                     walkString = plus_strings(walkString, unitigString, K);
+                }else if(isTip==1){ //right R   R    ]   ]   ]   ]
+                    //cut prefix
+                    unitigString = unitigString.substr(K - 1, unitigString.length() - (K - 1));
+                    walkString += "]" + unitigString + "]";
+                }else if(isTip==2){ //left L   L    [ [ [ 
+                    //cut suffix
+                    unitigString = unitigString.substr(0, unitigString.length() - (K - 1));
+                    walkString += "[" + unitigString + "[";
+                }
+                    
+                    
+                
+                
+            }
+            tipFile.close();
+            //DECODER
+        }
+        
+        
+        
+        
+        
+        
         delete[] merged;
         delete []  global_issinksource;
         delete []  global_priority;
@@ -1772,10 +1866,10 @@ int main(int argc, char** argv) {
     
     
     if(ALGOMODE==BRACKETCOMP){
-        formattedOutputForwardExt(G);
+        //formattedOutputForwardExt(G);
         C_new = C_bracketed;
-        //V_new  = V_bracketed;
-        V_new = G.countNewNode;
+        V_new  = V_bracketed;
+        //V_new = G.countNewNode;
     }else if(ALGOMODE == TWOWAYEXT){
         V_new = V_twoway;
         C_new = C_twoway;
