@@ -580,10 +580,6 @@ public:
                          {
                              return global_indegree[lhs.toNode] > global_indegree[rhs.toNode];
                          });
-                    //                    for(edge_t eeee: adjx){
-                    //                        cout<< global_indegree[eeee.toNode]<< " ";
-                    //                    }
-                    //                    cout<<endl;
                 }
                 if (ALGOMODE == OUTDEGREE_DFS){
                     if(p[x] == -1){
@@ -606,7 +602,6 @@ public:
                 
                 
                 // Now our branching code ::
-                
                 // For a white x
                 // Consider 2 case:
                 // Case 1. p[x] = -1, it can happen in two way, x is the first one ever in this connected component, or no one wanted to take x
@@ -1160,112 +1155,151 @@ public:
             hasSinkconn[i] = false;
         }
         //@@@@@ BRACKETED
-        if(ALGOMODE == BRACKETCOMP ){
-            for (auto const& x : sinkSrcEdges)
-            {
-                int sinksrc = x.first;
-                for(edge_t e: x.second){
-                    
-                    // can this occur?
-                    if(color[sinksrc] != 'w'){
-                        break;
-                    }
-                    //there are 3 cases
-                    //if consistent this way [[[if(nodeSign[e.toNode] == e.right)]]]
-                    //case fwd1: sinksrc -> contig start
-                    //case fwd2. sinksrc -> contig middle/end -> ... (say that sinksrc is LEFT)
-                    //case fwd3. sinksrc -> sinksrc_other (i'd say ignore this for now)
-                    //
-                    
-                    //case bwd1. contig end -> sinksrc
-                    //case bwd2. .... -> contig middle/start -> sinksrc (say that sinksrc is RIGHT)
-                    //case bwd3. sinksrc_other -> sinksrc  (i'd say ignore this for now)
-                    
-                    // 3 fwd cases
-                    if(nodeSign[e.toNode] == e.right){  //ensure it is a fwd case
-                        if(color[e.toNode]!='w' && color[e.toNode]!='r' && color[e.toNode]!='l'){//  this ensures that this to vertex is NOT sinksrc_other
-                            //case 1, 2
-                            int whichwalk = oldToNew[e.toNode].finalWalkId;
-                            //*** case fwd1 : sinksrc -> contigStart
-                            //case fwd2. sinksrc -> contig middle/end -> ... (say that sinksrc is LEFT)
-                            //let's merge case fwd1 & fwd2
-                            //color[sinksrc] = 'b';
-                            
-                            nodeSign[sinksrc] = e.left;
-                            color[sinksrc] = 'l';
-                            oldToNew[sinksrc].serial = whichwalk;
-                            oldToNew[sinksrc].finalWalkId = whichwalk;
-                            oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk - 1;
-                            
-                            oldToNew[sinksrc].isTip = 2; // from left
-                            /*
-                            if(oldToNew[e.toNode].pos_in_walk == 1 && hasSinkconn[e.toNode] ){
-                                oldToNew[sinksrc].isTip = 0;
-                                hasSinkconn[e.toNode] = true;
-                            }else{
-                                oldToNew[sinksrc].isTip = 2;
-                            }*/
-                            
-                            
-                            
-                            
-                            //fwd1
-                            //newToOld[whichwalk].insert(newToOld[whichwalk].begin(), sinksrc);
-                            //fwd2
-                            //std::list<int>::iterator it;
-                            //it = find (newToOld[whichwalk].begin(), newToOld[whichwalk].end(), e.toNode);
-                            //newToOld[whichwalk].insert(it, sinksrc);
-                       
-                        }
-                        
-                    }else{
-                        // 3 bwd cases
-                        
-                        if(color[e.toNode]!='w' && color[e.toNode]!='r' && color[e.toNode]!='l'){
-                            int whichwalk = oldToNew[e.toNode].finalWalkId;
-                            
-                            //*** case bwd1: contigend --> sinksrc
-                            //*** case bwd2: contigmiddle--> sinksrc
-                            
-                            
-                            nodeSign[sinksrc] = !e.left;
-                            //color[sinksrc] = 'b';
-                            color[sinksrc] = 'r';
-                            oldToNew[sinksrc].serial = whichwalk;
-                            oldToNew[sinksrc].finalWalkId = whichwalk;
-                            oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk + 1;
-                            
-                            /*
-                            if(oldToNew[e.toNode].isWalkEnd == true && !hasSinkconn[e.toNode] ){
-                                oldToNew[sinksrc].isTip = 0;
-                                hasSinkconn[e.toNode] = true;
-                            }else{
-                                oldToNew[sinksrc].isTip = 1;
-                            }*/
-                            oldToNew[sinksrc].isTip = 1; //from right
-                            
-                            //C_new+= unitigs.at(sinksrc).ln - (K-1) + 2;
-                            //C_bracketed+= unitigs.at(sinksrc).ln - (K-1) + 2;
-                            //newToOld[whichwalk].insert(newToOld[whichwalk].end(), sinksrc);
-                            
-                        }
-                    }
-                }
-            }
-            
-            // now take care of all the remaining edges
-            for (auto const& x : sinkSrcEdges)
-            {
-                int sinksrc = x.first;
-                if(color[sinksrc] == 'w'){  //still white, that means it goes isolated now
+        
+        if(1 == 0){
+            for (int sinksrc = 0; sinksrc<V; sinksrc++) {
+                if(global_issinksource[sinksrc] == 1){
                     list<int> xxx;
                     xxx.push_back(sinksrc);
                     newToOld.push_back(xxx);
                     oldToNew[sinksrc].serial = countNewNode++;
                     oldToNew[sinksrc].finalWalkId = oldToNew[sinksrc].serial;
                     oldToNew[sinksrc].pos_in_walk = 1;
+                    oldToNew[sinksrc].isTip = 0;
+                    // error resolved in sept 14
+                    color[sinksrc] = 'b';
                 }
             }
+        }
+        if(ALGOMODE == BRACKETCOMP){
+            if(0==0){
+                for (auto const& x : sinkSrcEdges)
+                {
+                    int sinksrc = x.first;
+                    for(edge_t e: x.second){
+                        
+                        // can this occur?
+                        if(color[sinksrc] != 'w'){
+                            break;
+                        }
+                        //there are 3 cases
+                        //if consistent this way [[[if(nodeSign[e.toNode] == e.right)]]]
+                        //case fwd1: sinksrc -> contig start
+                        //case fwd2. sinksrc -> contig middle/end -> ... (say that sinksrc is LEFT)
+                        //case fwd3. sinksrc -> sinksrc_other (i'd say ignore this for now)
+                        //
+                        
+                        //case bwd1. contig end -> sinksrc
+                        //case bwd2. .... -> contig middle/start -> sinksrc (say that sinksrc is RIGHT)
+                        //case bwd3. sinksrc_other -> sinksrc  (i'd say ignore this for now)
+                        
+                        // 3 fwd cases
+                        if(nodeSign[e.toNode] == e.right){  //ensure it is a fwd case
+                            if(color[e.toNode]!='w' && color[e.toNode]!='r' && color[e.toNode]!='l'){//  this ensures that this to vertex is NOT sinksrc_other
+                                //case 1, 2
+                                int whichwalk = oldToNew[e.toNode].finalWalkId;
+                                //*** case fwd1 : sinksrc -> contigStart
+                                //case fwd2. sinksrc -> contig middle/end -> ... (say that sinksrc is LEFT)
+                                //let's merge case fwd1 & fwd2
+                                //color[sinksrc] = 'b';
+                                
+                                nodeSign[sinksrc] = e.left;
+                                color[sinksrc] = 'l';
+                                oldToNew[sinksrc].serial = whichwalk;
+                                oldToNew[sinksrc].finalWalkId = whichwalk;
+                                oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk;
+                                
+                                //oldToNew[sinksrc].isTip = -1; // from left
+                                
+                                if(oldToNew[e.toNode].pos_in_walk == 1 && !hasSinkconn[e.toNode] ){
+                                    oldToNew[sinksrc].isTip = 0;
+                                    hasSinkconn[e.toNode] = true;
+                                    oldToNew[sinksrc].pos_in_walk--;
+                                }else{
+                                    oldToNew[sinksrc].isTip = -1;
+                                }
+                                
+                                
+                                
+                                
+                                //fwd1
+                                //newToOld[whichwalk].insert(newToOld[whichwalk].begin(), sinksrc);
+                                //fwd2
+                                //std::list<int>::iterator it;
+                                //it = find (newToOld[whichwalk].begin(), newToOld[whichwalk].end(), e.toNode);
+                                //newToOld[whichwalk].insert(it, sinksrc);
+                                
+                            }
+                            
+                        }else{
+                            // 3 bwd cases
+                            
+                            if(color[e.toNode]!='w' && color[e.toNode]!='r' && color[e.toNode]!='l'){
+                                int whichwalk = oldToNew[e.toNode].finalWalkId;
+                                
+                                //*** case bwd1: contigend --> sinksrc
+                                //*** case bwd2: contigmiddle--> sinksrc
+                                
+                                
+                                nodeSign[sinksrc] = !e.left;
+                                //color[sinksrc] = 'b';
+                                color[sinksrc] = 'r';
+                                oldToNew[sinksrc].serial = whichwalk;
+                                oldToNew[sinksrc].finalWalkId = whichwalk;
+                                oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk ;
+                                
+                                
+                                if(oldToNew[e.toNode].isWalkEnd == true && !hasSinkconn[e.toNode] ){
+                                    oldToNew[sinksrc].isTip = 0;
+                                    hasSinkconn[e.toNode] = true;
+                                    oldToNew[sinksrc].pos_in_walk++;
+                                }else{
+                                    oldToNew[sinksrc].isTip = 1;
+                                }
+                                //oldToNew[sinksrc].isTip = 1; //from right
+                                
+                                //C_new+= unitigs.at(sinksrc).ln - (K-1) + 2;
+                                //C_bracketed+= unitigs.at(sinksrc).ln - (K-1) + 2;
+                                //newToOld[whichwalk].insert(newToOld[whichwalk].end(), sinksrc);
+                                
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // now take care of all the remaining edges
+//            for (auto const& x : sinkSrcEdges)
+//            {
+//                int sinksrc = x.first;
+//                if(color[sinksrc] == 'w'){  //still white, that means it goes isolated now
+//                    list<int> xxx;
+//                    xxx.push_back(sinksrc);
+//                    newToOld.push_back(xxx);
+//                    oldToNew[sinksrc].serial = countNewNode++;
+//                    oldToNew[sinksrc].finalWalkId = oldToNew[sinksrc].serial;
+//                    oldToNew[sinksrc].pos_in_walk = 1;
+//                    oldToNew[sinksrc].isTip = 0;
+//                    // error resolved in sept 14
+//                    color[sinksrc] = 'b';
+//                }
+//            }
+            
+            for (int sinksrc = 0; sinksrc<V; sinksrc++) {
+                if(global_issinksource[sinksrc] == 1 && color[sinksrc] == 'w' ){
+                    list<int> xxx;
+                    xxx.push_back(sinksrc);
+                    newToOld.push_back(xxx);
+                    oldToNew[sinksrc].serial = countNewNode++;
+                    oldToNew[sinksrc].finalWalkId = oldToNew[sinksrc].serial;
+                    oldToNew[sinksrc].pos_in_walk = 1;
+                    oldToNew[sinksrc].isTip = 0;
+                    // error resolved in sept 14
+                    color[sinksrc] = 'b';
+                }
+            }
+            
+            
             
             
             //BRACKETCOMP encoder and printer::::
@@ -1285,24 +1319,32 @@ public:
             ofstream tipFile;
             tipFile.open("tipOutput.txt");
             
+            ofstream tipDebugFile;
+            tipDebugFile.open("tipDebug.txt");
+            
+            
             int lastWalk = -1;
             string walkString = "";
+            string tipLessWalkString ="";
             
             for(mytuple n : sorter){
                 int uid = get<0>(n);
                 int finalWalkId = get<1>(n);
                 int pos_in_walk = get<2>(n);
                 int isTip = get<3>(n);
-                cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
+                //cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
+
                 string unitigString;
                 if(finalWalkId!=lastWalk){
                     if(lastWalk != -1){
                         //print previous walk
+                        tipDebugFile<<">"<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
                         tipFile<< '>' << lastWalk << "\n" ;
                         V_bracketed++;
                         C_bracketed+=walkString.length();
-                        tipFile<< walkString;
-                        tipFile<<endl;
+                        
+                        tipDebugFile<<walkString<<endl;
+                        tipFile<< walkString<<endl;
                         //cout<<endl;
                     }
                     
@@ -1326,19 +1368,50 @@ public:
                      walkString = plus_strings(walkString, unitigString, K);
                 }else if(isTip==1){ //right R   R    ]   ]   ]   ]
                     //cut prefix
-                    unitigString = unitigString.substr(K - 1, unitigString.length() - (K - 1));
-                    walkString += "]" + unitigString + "]";
-                }else if(isTip==2){ //left L   L    [ [ [ 
+                    if(0==0){
+                        unitigString = unitigString.substr(K - 1, unitigString.length() - (K - 1));
+                        if(walkString.length()<K){
+                            cout<<"pos: "<<walkString.length()<<endl;
+                        }
+                        walkString += "]" + unitigString + "]";
+                    }
+                    if(0==1){
+                        tipFile<<">pref\n"<<unitigString<<endl;
+                    }
+                    
+                }else if(isTip==-1){ //left L   L    [ [ [
                     //cut suffix
-                    unitigString = unitigString.substr(0, unitigString.length() - (K - 1));
-                    walkString += "[" + unitigString + "[";
+                    if(0==0){
+                        unitigString = unitigString.substr(0, unitigString.length() - (K - 1));
+                        if(walkString.length()<K){
+                            cout<<"pos: "<<walkString.length()<<endl;
+                        }
+                        walkString += "[" + unitigString + "[";
+                        
+                    }
+                    if(1==0){
+                         tipFile<<">suf\n"<<unitigString<<endl;
+                    }
+                    
                 }
                     
                     
-                
+                tipDebugFile<<">"<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
+                tipFile<<">"<<lastWalk<<endl;
                 
             }
+            V_bracketed++;
+            C_bracketed+=walkString.length();
+            
+            tipDebugFile<< walkString;
+            tipDebugFile<<endl;
+            tipDebugFile.close();
+            
+            
+            tipFile<< walkString;
+            tipFile<<endl;
             tipFile.close();
+            
             //DECODER
         }
         
@@ -1890,7 +1963,13 @@ int main(int argc, char** argv) {
     
     
    float percent_saved_c = (1-(C_new*1.0/C))*100.0;
-   float theoreticalBitsKmerSaved =C_new*2.0/numKmers;
+    float theoreticalBitsKmerSaved;
+    if(ALGOMODE== BRACKETCOMP){
+         theoreticalBitsKmerSaved =C_new*3.0/numKmers;
+    }else{
+         theoreticalBitsKmerSaved =C_new*2.0/numKmers;
+    }
+   
     
     printf("%s\t",  mapmode[ALGOMODE].c_str());
     printf("%d\t\
