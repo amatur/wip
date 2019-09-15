@@ -1,11 +1,8 @@
-// --- VERSION 5.2 ----
-// - Aug 28
+// --- VERSION 6.0 ----
+// - Sep 15
 // forward ext + two way + bracket error
-
 //Caution:
 //removed all self-loops
-
-
 #include <cmath>
 #include<cstring>
 #include <fstream>
@@ -27,32 +24,11 @@
 #include <deque>
 #include <unistd.h>
 #include <tuple>
-
-
 using namespace std;
 
-typedef tuple<int,int,int, int> mytuple; // uid, walkid, pos, isTip
-
-bool sort_by_walkId (const mytuple &lhs, const mytuple &rhs){
-    return get<1>(lhs) < get<1>(rhs);
-}
-bool sort_by_pos (const mytuple &lhs, const mytuple &rhs){
-    return get<2>(lhs) < get<2>(rhs);
-}
-bool sort_by_tipstatus (const mytuple &lhs, const mytuple &rhs){
-    return get<3>(lhs) < get<3>(rhs);
-}
-
-bool DEBUGMODE = true;
+bool DEBUGMODE = false;
 int K = 31;
 string UNITIG_FILE = "/Volumes/exFAT/data2019/staphsub/31/list_reads.unitigs.fa";
-int C_twoway = 0;
-int C_bracketed = 0;
-int V_twoway = 0;
-int V_new = 0;
-int C_new = 0;
-int V_bracketed = 0;
-
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, NODENUMBER_DBG = 5, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
 
@@ -63,14 +39,23 @@ bool FLG_NEWUB = true;
 DEBUGFLAG_T DBGFLAG = NONE; //NODENUMBER_DBG
 ALGOMODE_T ALGOMODE = BRACKETCOMP;
 
-string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "two_way_extension", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "bracket_comp"
+string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "twoway", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "tip"
 };
 string modefilename[] = {"Fwd", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "Tip"
 };
 
-typedef unsigned char uchar;
 
+typedef tuple<int,int,int, int> fourtuple; // uid, walkid, pos, isTip
 
+bool sort_by_walkId (const fourtuple &lhs, const fourtuple &rhs){
+    return get<1>(lhs) < get<1>(rhs);
+}
+bool sort_by_pos (const fourtuple &lhs, const fourtuple &rhs){
+    return get<2>(lhs) < get<2>(rhs);
+}
+bool sort_by_tipstatus (const fourtuple &lhs, const fourtuple &rhs){
+    return get<3>(lhs) < get<3>(rhs);
+}
 
 typedef struct {
     int serial = -1;
@@ -108,13 +93,19 @@ typedef struct {
     int kmerEndIndex;
 } newEdge_t;
 
+int C_ustitch = 0;
+int C_twoway_ustitch = 0;
+int C_tip_ustitch = 0;
+int V_ustitch = 0;
+int V_twoway_ustitch = 0;
+int V_tip_ustitch = 0;
+
 int isolated_node_count = 0;
 int sink_count = 0;
 int source_count = 0;
 int sharedparent_count = 0;
 int sharparentCntRefined = 0;
 int onecount = 0;
-
 
 struct node_sorter {
     int node;
@@ -136,8 +127,6 @@ map<pair <int, int>, int> inOutCombo;
 vector<vector<edge_t> > adjList;
 vector<vector<edge_t> > reverseAdjList;
 
-vector<edge_both_t> resolveLaterEdges;
-//vector<edge_both_t> sinkSrcEdges;
 vector<unitig_struct_t> unitigs;
 map<int, string> newSequences;
 map<int, string> newNewSequences; //int is the unitig id (old id)
@@ -285,23 +274,22 @@ public:
     int time = 0;
     
     char* color;
-    int* p;
+    int* p_dfs;
     bool* nodeSign;
     new_node_info_t* oldToNew;
     bool* saturated;
-    struct node_sorter * indegree;
-    struct node_sorter * outdegree;
+    struct node_sorter * sortStruct;
     bool* countedForLowerBound;
     DisjointSet disSet;
     GroupMerger gmerge;
     
     Graph() {
         color = new char[V];
-        p = new int[V];
+        p_dfs = new int[V];
         nodeSign = new bool[V];
         oldToNew = new new_node_info_t[V];
         saturated = new bool[V];
-        indegree = new struct node_sorter[V];
+        sortStruct = new struct node_sorter[V];
         global_indegree = new int[V];
         global_outdegree = new int[V];
         global_plusindegree = new int[V];
@@ -318,8 +306,8 @@ public:
             
             oldToNew[i].serial = -1;
             saturated[i] = false;
-            indegree[i].sortkey = 0;
-            indegree[i].node = i;
+            sortStruct[i].sortkey = 0;
+            sortStruct[i].node = i;
             global_indegree[i] = 0;
             global_outdegree[i] = 0;
             global_plusindegree[i] = 0;
@@ -343,7 +331,7 @@ public:
         for(vector<edge_t> elist: adjList){
             for(edge_t e: elist){
                 global_indegree[e.toNode] += 1;
-                indegree[e.toNode].sortkey = indegree[e.toNode].sortkey + 1;
+                sortStruct[e.toNode].sortkey = sortStruct[e.toNode].sortkey + 1;
                 if(e.right == true){
                     global_plusindegree[e.toNode] += 1;
                 }
@@ -419,7 +407,7 @@ public:
             //if(true){
             if(FLG_NEWUB){
                 //ENDPOINT SIDE UPPER BOUND
-     
+                
                 for(edge_t e_xy: elist){
                     int y = e_xy.toNode;
                     vector<edge_t> adjY = adjList[y];
@@ -440,10 +428,6 @@ public:
                     
                     if(eligible){
                         neighborCount++;
-                        //if(countedSides.count(pairr)==0)
-                        
-                        
-                        //countedSides.insert(pairr);
                     }
                 }
                 
@@ -467,11 +451,6 @@ public:
                 for(edge_t e_xy: elist){
                     int y = e_xy.toNode;
                     
-                    //                if(!counted[y] && global_plusindegree[y] == 1 && global_plusoutdegree[y] == 1 && e_xy.right == true ){
-                    //                    neighborCnt++;
-                    //                    counted[y] = true;
-                    //                }
-                    
                     if(!countedForLowerBound[y]){
                         vector<edge_t> adjY = adjList[y];
                         bool eligible = true;
@@ -489,11 +468,9 @@ public:
                             neighborCount++;
                             countedNodes.push(y);
                         }
-                        
                     }
                 }
-                
-                
+
                 if(global_issinksource[xc] == 1){
                     if(neighborCount>1){
                         sharedparent_count += neighborCount - 1 ;
@@ -517,12 +494,17 @@ public:
             
             xc++;
         }
+        
+        //check if not ALGOMODE == INDEGREE_DFS_INVERTED
+        delete [] global_indegree;
+        delete [] global_outdegree;
+        delete [] global_plusindegree;
+        delete [] global_plusoutdegree;
     }
     
     
     void DFS_visit(int u) {
         if(ALGOMODE == BRACKETCOMP){
-            
             if(global_issinksource[u]==1){
                 vector<edge_t> adju = adjList.at(u);
                 vector<edge_t> myvector;
@@ -583,7 +565,7 @@ public:
                          });
                 }
                 if (ALGOMODE == OUTDEGREE_DFS){
-                    if(p[x] == -1){
+                    if(p_dfs[x] == -1){
                         sort( adjx.begin( ), adjx.end( ), [ ]( const edge_t& lhs, const edge_t& rhs )
                              {
                                  return global_outdegree[lhs.toNode] < global_outdegree[rhs.toNode];
@@ -610,7 +592,7 @@ public:
                 // Case 2. p[x] != -1, so x won't be the representative/head of a newHome. x just gets added to its parent's newHome.
                 int u = unitigs.at(x).ln; //unitig length
                 
-                if (p[x] == -1) {
+                if (p_dfs[x] == -1) {
                     
                     list<int> xxx;
                     xxx.push_back(x);
@@ -649,18 +631,18 @@ public:
                     
                 } else {
                     
-                    newToOld[oldToNew[p[x]].serial].push_back(x);
-                    oldToNew[x].serial = oldToNew[p[x]].serial;
+                    newToOld[oldToNew[p_dfs[x]].serial].push_back(x);
+                    oldToNew[x].serial = oldToNew[p_dfs[x]].serial;
                     oldToNew[x].finalWalkId = oldToNew[x].serial;
                     
                     
                     if(ALGOMODE==TWOWAYEXT || ALGOMODE==BRACKETCOMP ){
-                        disSet.Union(x, p[x]);
+                        disSet.Union(x, p_dfs[x]);
                     }
                     
                     
-                    oldToNew[x].startPosWithKOverlap = oldToNew[p[x]].endPosWithKOVerlap + 1;
-                    oldToNew[x].pos_in_walk = oldToNew[p[x]].pos_in_walk + 1;
+                    oldToNew[x].startPosWithKOverlap = oldToNew[p_dfs[x]].endPosWithKOVerlap + 1;
+                    oldToNew[x].pos_in_walk = oldToNew[p_dfs[x]].pos_in_walk + 1;
                     if (u < K) {
                         oldToNew[x].endPosWithKOVerlap = oldToNew[x].startPosWithKOverlap + 1; // do we actually see this? yes
                         if(DBGFLAG == UKDEBUG){
@@ -691,7 +673,6 @@ public:
                         if(global_issinksource[y] == true){
                             continue;
                         }
-                        
                     }
                     
                     // cout << "Edge " << x << "->" << y << " "<<global_indegree[y] << endl;
@@ -711,40 +692,36 @@ public:
                         }
                     }
                     
-                    
-                    
                     //handle self-loop, self-loop will always be an extra edge
                     if (y == x) {
                         edge_both_t e;
                         e.edge = yEdge;
                         e.fromNode = x;
-                        resolveLaterEdges.push_back(e);
                     } else if (saturated[x]) {
                         // Since x is saturated, we only add resolveLater edges
                         // no need to check for consistency
-                        if (y != p[x]) {
+                        if (y != p_dfs[x]) {
                             edge_both_t e;
                             e.edge = yEdge;
                             e.fromNode = x;
-                            resolveLaterEdges.push_back(e);
                         }
                     } else {
                         // If x has space to take a child, meaning x is not saturated
                         // hunting for potential child
                         
-                        if (color[y] == 'w' && p[y] == -1) {
+                        if (color[y] == 'w' && p_dfs[y] == -1) {
                             // y has white color & got no parent => means it's homeless, so let's see if we can take it as a child of x
                             //But just see if it is eligible to be a child, i.e. is it consistent (sign check)?
                             
                             //2 case, Does x's child have grandparent?
                             // No.
-                            if (p[x] == -1 && ALGOMODE != NODEASSIGN) {
+                            if (p_dfs[x] == -1 && ALGOMODE != NODEASSIGN) {
                                 // case 1: child has no grandparent
                                 // so extend path without checking any sign
                                 
                                 nodeSign[x] = yEdge.left;
                                 nodeSign[y] = yEdge.right;
-                                p[y] = x;
+                                p_dfs[y] = x;
                                 saturated[x] = true; //found a child
                                 
                                 
@@ -757,7 +734,7 @@ public:
                             } else if (nodeSign[x] == yEdge.left) {
                                 // case 2: child (=y) has grandparent, i.e. x's parent exists
                                 nodeSign[y] = yEdge.right;
-                                p[y] = x;
+                                p_dfs[y] = x;
                                 saturated[x] = true; //found a child
                                 
                                 //TESTED NOT YET
@@ -770,7 +747,6 @@ public:
                                 edge_both_t e;
                                 e.edge = yEdge;
                                 e.fromNode = x;
-                                resolveLaterEdges.push_back(e);
                             }
                             
                         } else {
@@ -778,18 +754,17 @@ public:
                             //merger
                             if(ALGOMODE == TWOWAYEXT || ALGOMODE == BRACKETCOMP){
                                 // y is not white
-                                bool consistentEdge = (nodeSign[y] == yEdge.right && (p[x]==-1 || (p[x]!=-1&& nodeSign[x] == yEdge.left)) );
-                                if(p[y]==-1 && consistentEdge && oldToNew[x].serial != oldToNew[y].serial){
+                                bool consistentEdge = (nodeSign[y] == yEdge.right && (p_dfs[x]==-1 || (p_dfs[x]!=-1&& nodeSign[x] == yEdge.left)) );
+                                if(p_dfs[y]==-1 && consistentEdge && oldToNew[x].serial != oldToNew[y].serial){
                                     
                                     //cout<<"x: "<<x<<":" <<disSet.find_set(x)<<" ";
                                     //cout<<"y: "<<y<<":" <<disSet.find_set(y) <<endl;
                                     
                                     //not in same group already, prevent cycle
                                     if(disSet.find_set(x)!=disSet.find_set(y)){
-                                        
                                         nodeSign[x] = yEdge.left;
                                         nodeSign[y] = yEdge.right;
-                                        p[y] = x;
+                                        p_dfs[y] = x;
                                         saturated[x] = true; //found a child
                                         // oldToNew[y].serial
                                         
@@ -797,94 +772,32 @@ public:
                                         //cout<<"x: "<<disSet.find_set(x);
                                         //cout<<"y: "<<disSet.find_set(y);
                                         //cout<<endl;
-                                        
                                         //cout<<oldToNew[x].serial<<"+"<<oldToNew[y].serial<<endl;
                                         gmerge.connectGroups(oldToNew[x].serial,oldToNew[y].serial );
                                         
                                     }
-                                    
                                 }
-                                
                             }
                             
-                            if (y != p[x]) {
+                            if (y != p_dfs[x]) {
                                 edge_both_t e;
                                 e.edge = yEdge;
                                 e.fromNode = x;
-                                resolveLaterEdges.push_back(e);
-                                if (DBGFLAG == PARTICULAR) {
-                                    // DEBUGGGING a particular edge
-                                    if (y == 2 && x == 0) {
-                                        cout << "Saturated? " << saturated[x] << endl;
-                                    }
-                                }
-                            } else {
-                                if (DBGFLAG == PARTICULAR) {
-                                    // DEBUGGGING a particular edge
-                                    if (y == 2 && x == 0) {
-                                        cout << "Saturated? " << saturated[x] << endl;
-                                    }
-                                }
                             }
-                            
-                            
                         }
                     }
                 }
-                
             } else if (color[x] == 'g') {
                 time = time + 1;
                 color[x] = 'b';
             }
-            
         }
     }
     
     
-    // might be useful for doing some visualization.
-    bool canReachSinkSource(int v, bool visited[], bool sign)
-    {
-        // Mark the current node as visited and
-        // print it
-        
-        visited[v] = true;
-        //cout << v << " ";
-        bool reachable = false;
-        
-        if(global_plusoutdegree[v] == 0 && global_plusindegree[v] != 0){
-            //cout<<v<<"is sink.";
-            return true;//sink
-            
-        }
-        if(global_plusindegree[v] == 0 && global_plusoutdegree[v] != 0){
-            //cout<<v<<"is source.";
-            return true;//source
-        }
-        if(global_indegree[v] == 0){
-            //cout<<v<<"is isolated.";
-            return true;//isolated
-        }
-        
-        
-        // Recur for all the vertices adjacent
-        // to this vertex
-        vector<edge_t>::iterator i;
-        for (i = adjList[v].begin(); i != adjList[v].end(); ++i){
-            
-            if (!visited[(*i).toNode] && sign==(*i).left){
-                reachable = canReachSinkSource((*i).toNode, visited, (*i).right);
-                if(reachable==true){
-                    return true;
-                }
-            }
-            
-        }
-        return reachable;
-        
-    }
     
     void DFS() {
-
+        
         if(ALGOMODE == NODEASSIGN){
             for (int i=0; i<V; i++) {
                 nodeSign[i] = true;
@@ -896,49 +809,49 @@ public:
         
         if(ALGOMODE == SOURCEFIRST){
             for (int i = 0; i < V; i++) {
-                indegree[i].node = i;
-                indegree[i].sortkey = global_issinksource[i];
+                sortStruct[i].node = i;
+                sortStruct[i].sortkey = global_issinksource[i];
             }
-            vector<struct node_sorter> myvector (indegree, indegree+V);
+            vector<struct node_sorter> myvector (sortStruct, sortStruct+V);
             sort (myvector.begin(), myvector.end(), sort_by_key_inverted);
-            copy(myvector.begin(), myvector.end(), indegree);
+            copy(myvector.begin(), myvector.end(), sortStruct);
         }
         
         if(ALGOMODE == EPPRIOR){
             for (int i = 0; i < V; i++) {
-                indegree[i].node = i;
-                indegree[i].sortkey = global_priority[i];
+                sortStruct[i].node = i;
+                sortStruct[i].sortkey = global_priority[i];
             }
-            vector<struct node_sorter> myvector (indegree, indegree+V);
+            vector<struct node_sorter> myvector (sortStruct, sortStruct+V);
             sort (myvector.begin(), myvector.end(), sort_by_key_inverted);
-            copy(myvector.begin(), myvector.end(), indegree);
+            copy(myvector.begin(), myvector.end(), sortStruct);
         }
         
         if(ALGOMODE == INDEGREE_DFS_INVERTED){
             for (int i = 0; i < V; i++) {
-                indegree[i].node = i;
-                indegree[i].sortkey = global_indegree[i];
+                sortStruct[i].node = i;
+                sortStruct[i].sortkey = global_indegree[i];
             }
-            vector<struct node_sorter> myvector (indegree, indegree+V);
+            vector<struct node_sorter> myvector (sortStruct, sortStruct+V);
             sort (myvector.begin(), myvector.end(), sort_by_key_inverted);
             //random_shuffle ( myvector.begin(), myvector.end() );
-            copy(myvector.begin(), myvector.end(), indegree);
+            copy(myvector.begin(), myvector.end(), sortStruct);
             
         }
         
         if (ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1 ){
             for (int i = 0; i < V; i++) {
-                indegree[i].node = i;
-                indegree[i].sortkey = global_indegree[i];
+                sortStruct[i].node = i;
+                sortStruct[i].sortkey = global_indegree[i];
             }
-            vector<struct node_sorter> myvector (indegree, indegree+V);
+            vector<struct node_sorter> myvector (sortStruct, sortStruct+V);
             sort (myvector.begin(), myvector.end(), sort_by_key);
-            copy(myvector.begin(), myvector.end(), indegree);
+            copy(myvector.begin(), myvector.end(), sortStruct);
             
             if(DBGFLAG == INDEGREEPRINT){
                 cout<<"print in degrees"<<endl;
                 for(int i = 0; i<V; i++){
-                    cout<<indegree[i].node<<"->"<<indegree[i].sortkey<<endl;
+                    cout<<sortStruct[i].node<<"->"<<sortStruct[i].sortkey<<endl;
                 }
             }
         }
@@ -946,31 +859,31 @@ public:
         
         if(ALGOMODE == RANDOM_DFS){
             for (int i = 0; i < V; i++) {
-                indegree[i].node = i;
-                indegree[i].sortkey = global_indegree[i];
+                sortStruct[i].node = i;
+                sortStruct[i].sortkey = global_indegree[i];
             }
-            vector<struct node_sorter> myvector (indegree, indegree+V);
+            vector<struct node_sorter> myvector (sortStruct, sortStruct+V);
             sort (myvector.begin(), myvector.end(), sort_by_key);
             random_shuffle ( myvector.begin(), myvector.end() );
-            copy(myvector.begin(), myvector.end(), indegree);
+            copy(myvector.begin(), myvector.end(), sortStruct);
             
         }
         
         
         if (ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1){
             for (int i = 0; i < V; i++) {
-                indegree[i].node = i;
-                indegree[i].sortkey = global_outdegree[i];
+                sortStruct[i].node = i;
+                sortStruct[i].sortkey = global_outdegree[i];
             }
-            vector<struct node_sorter> myvector (indegree, indegree+V);
+            vector<struct node_sorter> myvector (sortStruct, sortStruct+V);
             sort (myvector.begin(), myvector.end(), sort_by_key);
-            copy(myvector.begin(), myvector.end(), indegree);
+            copy(myvector.begin(), myvector.end(), sortStruct);
         }
         
         double time_a = readTimer();
         for (int i = 0; i < V; i++) {
             color[i] = 'w';
-            p[i] = -1;
+            p_dfs[i] = -1;
         }
         cout<<"Basic V loop time: "<<readTimer() - time_a<<" sec"<<endl;
         
@@ -979,7 +892,7 @@ public:
         for (int j = 0; j < V; j++) {
             int i;
             if(ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1 || ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1 || ALGOMODE == SOURCEFIRST){
-                i = indegree[j].node;
+                i = sortStruct[j].node;
             }else{
                 i = j;
             }
@@ -995,7 +908,7 @@ public:
         }
         cout<<"DFS time: "<<readTimer() - time_a<<" sec"<<endl;
         
-
+        
         
         
         cout<<"## START stitching strings: "<<endl;
@@ -1019,8 +932,8 @@ public:
             for(int x: newToOld[i]){
                 newNewSequences[x] = s;
             }
-           
-            C_new += s.length();
+            
+            C_ustitch += s.length();
         }
         cout<<"TIME to stitch: "<<readTimer() - time_a<<" sec."<<endl;
         
@@ -1095,7 +1008,7 @@ public:
                         merged[i] = true;
                         mergeString = plus_strings(mergeString, newSequences[i], K);
                         walkFirstNode[i] = headOfThisWalk;
-
+                        
                         // travesing the walk list of walk ID i
                         for(int uid: newToOld[i]){
                             oldToNew[uid].serial = commonWalkId;
@@ -1110,8 +1023,8 @@ public:
                     
                     
                     //cout<<endl;
-                    V_twoway ++;
-                    C_twoway+=mergeString.length();
+                    V_twoway_ustitch ++;
+                    C_twoway_ustitch+=mergeString.length();
                     betterfile << '>' << commonWalkId <<" LN:i:"<<mergeString.length()<<" ";
                     betterfile<<endl;
                     
@@ -1140,8 +1053,8 @@ public:
                     betterfile<<endl;
                     betterfilePlain<<endl;
                     
-                    C_twoway+=newSequences[newNodeNum].length();
-                    V_twoway++;
+                    C_twoway_ustitch+=newSequences[newNodeNum].length();
+                    V_twoway_ustitch++;
                 }
             }
             betterfile.close();
@@ -1150,31 +1063,34 @@ public:
         
         
         //BRACKETCOMP encoder and printer::::
-        if(0==0){
-            vector<mytuple> sorter;
-            for(int uid = 0 ; uid< V; uid++){
-                
-                new_node_info_t nd = oldToNew[uid];
-                
-                
-                //if(!global_issinksource[uid]){
-                sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
-                //}
-                
-            }
-            stable_sort(sorter.begin(),sorter.end(),sort_by_tipstatus);
-            stable_sort(sorter.begin(),sorter.end(),sort_by_pos);
-            stable_sort(sorter.begin(),sorter.end(),sort_by_walkId);
-            
-            for(mytuple n : sorter){
-                int uid = get<0>(n);
-                int finalWalkId = get<1>(n);
-                int pos_in_walk = get<2>(n);
-                int isTip = get<3>(n);
-                cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<" "<<oldToNew[uid].isWalkEnd<< " was merged: "<< merged[oldToNew[uid].finalWalkId]<< endl;
-            }
-        }
+        //        if(0==0){
+        //            vector<mytuple> sorter;
+        //            for(int uid = 0 ; uid< V; uid++){
+        //
+        //                new_node_info_t nd = oldToNew[uid];
+        //
+        //
+        //                //if(!global_issinksource[uid]){
+        //                sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
+        //                //}
+        //
+        //            }
+        //            stable_sort(sorter.begin(),sorter.end(),sort_by_tipstatus);
+        //            stable_sort(sorter.begin(),sorter.end(),sort_by_pos);
+        //            stable_sort(sorter.begin(),sorter.end(),sort_by_walkId);
+        //
+        //            for(mytuple n : sorter){
+        //                int uid = get<0>(n);
+        //                int finalWalkId = get<1>(n);
+        //                int pos_in_walk = get<2>(n);
+        //                int isTip = get<3>(n);
+        //                cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<" "<<oldToNew[uid].isWalkEnd<< " was merged: "<< merged[oldToNew[uid].finalWalkId]<< endl;
+        //            }
+        //        }
         
+        
+        // clean up
+        delete [] merged;
         
         /// TWOWAYEXT DONE: NOW LET"S DO BRACK COMP
         
@@ -1187,6 +1103,8 @@ public:
         }
         //@@@@@ BRACKETED
         
+         // @@DBG_BLOCK
+        /*
         if(2 == 0){
             for (int sinksrc = 0; sinksrc<V; sinksrc++) {
                 if(global_issinksource[sinksrc] == 1){
@@ -1202,21 +1120,24 @@ public:
                 }
             }
         }
+         */
+        
+        
         if(ALGOMODE == BRACKETCOMP){
             if(2==2){
                 for (auto const& x : sinkSrcEdges)
                 {
                     int sinksrc = x.first;
-                    if(sinksrc == 3997){
+                    if(sinksrc == 3997){    // @@DBG_BLOCK
                         // || sinksrc == 3997
                     }
                     for(edge_t e: x.second){
                         
-                        // can this occur?
+                        // when can this occur? it does occur
                         if(color[sinksrc] != 'w'){
                             break;
                         }
-                          
+                        
                         //there are 3 cases
                         //if consistent this way [[[if(nodeSign[e.toNode] == e.right)]]]
                         //case fwd1: sinksrc -> contig start
@@ -1245,8 +1166,8 @@ public:
                                 oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk - 1;
                                 assert(oldToNew[e.toNode].pos_in_walk != -1);
                                 
-                                int k = oldToNew[e.toNode].pos_in_walk;
-                                bool jjjj = hasStartTip[e.toNode];
+                                 // @@DBG_BLOCK int k = oldToNew[e.toNode].pos_in_walk;
+                                 // @@DBG_BLOCK bool jjjj = hasStartTip[e.toNode];
                                 if(oldToNew[e.toNode].pos_in_walk == 1 && hasStartTip[e.toNode] == false ){
                                     oldToNew[sinksrc].isTip = 0;
                                     hasStartTip[e.toNode] = true;
@@ -1256,23 +1177,13 @@ public:
                                 }else{
                                     oldToNew[sinksrc].isTip = 2;
                                 }
-
-                                
-                                
-                                
-                                //fwd1
-                                //newToOld[whichwalk].insert(newToOld[whichwalk].begin(), sinksrc);
-                                //fwd2
-                                //std::list<int>::iterator it;
-                                //it = find (newToOld[whichwalk].begin(), newToOld[whichwalk].end(), e.toNode);
-                                //newToOld[whichwalk].insert(it, sinksrc);
                                 
                             }
                             
                         }else{
                             // 3 bwd cases
                             
-                            if(color[e.toNode]!='w' && color[e.toNode]!='r' && color[e.toNode]!='l'){
+                            if((color[e.toNode]!='w' && color[e.toNode]!='r' && color[e.toNode]!='l')){
                                 int whichwalk = oldToNew[e.toNode].finalWalkId;
                                 
                                 //*** case bwd1: contigend --> sinksrc
@@ -1293,35 +1204,29 @@ public:
                                     oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk + 1;
                                 }else{
                                     oldToNew[sinksrc].isTip = 1;
-                                }
-                                //oldToNew[sinksrc].isTip = 1; //from right
-                                
-                                //C_new+= unitigs.at(sinksrc).ln - (K-1) + 2;
-                                //C_bracketed+= unitigs.at(sinksrc).ln - (K-1) + 2;
-                                //newToOld[whichwalk].insert(newToOld[whichwalk].end(), sinksrc);
-                                
-                            }
+                                }                            }
                         }
                     }
                 }
             }
-            
+            delete [] hasStartTip;
+            delete [] hasEndTip;
             // now take care of all the remaining edges
-//            for (auto const& x : sinkSrcEdges)
-//            {
-//                int sinksrc = x.first;
-//                if(color[sinksrc] == 'w'){  //still white, that means it goes isolated now
-//                    list<int> xxx;
-//                    xxx.push_back(sinksrc);
-//                    newToOld.push_back(xxx);
-//                    oldToNew[sinksrc].serial = countNewNode++;
-//                    oldToNew[sinksrc].finalWalkId = oldToNew[sinksrc].serial;
-//                    oldToNew[sinksrc].pos_in_walk = 1;
-//                    oldToNew[sinksrc].isTip = 0;
-//                    // error resolved in sept 14
-//                    color[sinksrc] = 'b';
-//                }
-//            }
+            //            for (auto const& x : sinkSrcEdges)
+            //            {
+            //                int sinksrc = x.first;
+            //                if(color[sinksrc] == 'w'){  //still white, that means it goes isolated now
+            //                    list<int> xxx;
+            //                    xxx.push_back(sinksrc);
+            //                    newToOld.push_back(xxx);
+            //                    oldToNew[sinksrc].serial = countNewNode++;
+            //                    oldToNew[sinksrc].finalWalkId = oldToNew[sinksrc].serial;
+            //                    oldToNew[sinksrc].pos_in_walk = 1;
+            //                    oldToNew[sinksrc].isTip = 0;
+            //                    // error resolved in sept 14
+            //                    color[sinksrc] = 'b';
+            //                }
+            //            }
             
             for (int sinksrc = 0; sinksrc<V; sinksrc++) {
                 if(global_issinksource[sinksrc] == 1 && color[sinksrc] == 'w' ){
@@ -1341,13 +1246,10 @@ public:
             
             
             //BRACKETCOMP encoder and printer::::
-            vector<mytuple> sorter;
+            vector<fourtuple> sorter;
             for(int uid = 0 ; uid< V; uid++){
                 new_node_info_t nd = oldToNew[uid];
-                //if(!global_issinksource[uid]){
-                    sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
-                //}
-                
+                sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
             }
             stable_sort(sorter.begin(),sorter.end(),sort_by_tipstatus);
             stable_sort(sorter.begin(),sorter.end(),sort_by_pos);
@@ -1359,40 +1261,35 @@ public:
             
             ofstream tipDebugFile;
             tipDebugFile.open("tipDebug.txt");
-            
-            
+
             int lastWalk = -1;
             string walkString = "";
             string tipLessWalkString ="";
             
-            for(mytuple n : sorter){
+            for(fourtuple n : sorter){
                 int uid = get<0>(n);
                 int finalWalkId = get<1>(n);
                 int pos_in_walk = get<2>(n);
                 int isTip = get<3>(n);
                 //cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
-
+                
                 string unitigString;
                 if(finalWalkId!=lastWalk){
                     if(lastWalk != -1){
                         //print previous walk
-                        tipDebugFile<<">"<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
-                        tipFile<< '>' << lastWalk << "\n" ;
-                        V_bracketed++;
-                        C_bracketed+=walkString.length();
+                        tipDebugFile<<">"<<lastWalk << " " << uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
+                        //tipFile<< '>' << lastWalk << "\n" ;
+                        V_tip_ustitch++;
+                        C_tip_ustitch+=walkString.length();
                         
                         tipDebugFile<<walkString<<endl;
                         tipFile<< walkString<<endl;
-                        //cout<<endl;
                     }
                     
                     //start a new walk
-                   // cout<<"Walk: (" <<finalWalkId<<" ) = ";
+                    // cout<<"Walk: (" <<finalWalkId<<" ) = ";
                     walkString = "";
                     lastWalk = finalWalkId;
-                    
-                }else{
-                    //cout<<pos_in_walk<<" ";
                 }
                 
                 if(nodeSign[uid] == false){
@@ -1401,9 +1298,9 @@ public:
                     unitigString =  (unitigs.at(uid).sequence);
                 }
                 
-               
+                
                 if(isTip == 0){
-                     walkString = plus_strings(walkString, unitigString, K);
+                    walkString = plus_strings(walkString, unitigString, K);
                 }else if(isTip==1){ //right R   R    ]   ]   ]   ]
                     //cut prefix: correct
                     if(0==0){
@@ -1418,7 +1315,7 @@ public:
                     }
                     
                 }else if(isTip==2){ //left L   L    [ [ [
-                    //cut suffix
+                    //cut suffix: correct
                     if(0==0){
                         unitigString = unitigString.substr(0, unitigString.length() - (K - 1));
                         if(walkString.length()<K){
@@ -1427,64 +1324,60 @@ public:
                         walkString += "[" + unitigString + "[";
                     }
                     if(1==0){
-                         tipFile<<">suf\n"<<unitigString<<endl;
+                        tipFile<<">suf\n"<<unitigString<<endl;
                     }
-                    
                 }
-                    
-                    
-                tipDebugFile<<">"<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
-                //tipFile<<">"<<lastWalk<<endl;
                 
+                tipDebugFile<<">"<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
+                //tipFile<<">"<<lastWalk<<endl; // keep this to get fasta type format
             }
-            V_bracketed++;
-            C_bracketed+=walkString.length();
+            V_tip_ustitch++;
+            C_tip_ustitch+=walkString.length();
             
-            tipFile<<">"<<lastWalk<<endl;
-            tipDebugFile<< walkString;
-            tipDebugFile<<endl;
+            tipDebugFile<< walkString<<endl;
             tipDebugFile.close();
             
-            
-            tipFile<< walkString;
-            tipFile<<endl;
+            tipFile<< walkString<<endl;
             tipFile.close();
-            
-            //DECODER
         }
         
-        
-        
-        
-        
-        
-        delete[] merged;
         delete []  global_issinksource;
         delete []  global_priority;
-
+        freeDFS();
     }
-
+    
+    inline void freeDFS(){
+        delete [] saturated;
+        delete [] p_dfs;
+    }
+    
     ~Graph() {
         delete [] color;
-        delete [] p;
         delete [] nodeSign;
         delete [] oldToNew;
-        delete [] saturated;
-        delete [] indegree;
+        
+        delete [] sortStruct;
         delete [] countedForLowerBound;
     }
 };
 
+int maximumUnitigLength(){
+    int m = 0;
+    for(unitig_struct_t u: unitigs){
+        if(u.ln > m){
+            m = u.ln;
+        }
+    }
+    return m;
+}
 
 void printNewGraph(Graph &G){
     list<int> *newToOld = new list<int>[G.countNewNode];
     
-    // PRINT NEW GRAPH
     for (int i = 0; i < G.V; i++) {
         newToOld[G.oldToNew[i].serial].push_back(i);
-        //cout << "old " << i << "-> new" << G.oldToNew[i].serial << endl;
+        cout << "old " << i << "-> new" << G.oldToNew[i].serial << endl;
     }
-    
     for (int i = 0; i < G.countNewNode; i++) {
         list<int> adj = newToOld[i];
         
@@ -1493,7 +1386,6 @@ void printNewGraph(Graph &G){
             cout<<val<<" ";
         }
         cout<<endl;
-        
     }
     delete [] newToOld;
 }
@@ -1510,9 +1402,6 @@ void formattedOutputForwardExt(Graph &G){
     //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
     for (int newNodeNum = 0; newNodeNum<G.countNewNode; newNodeNum++){
         myfile << '>' << newNodeNum <<" LN:i:"<<newSequences[newNodeNum].length()<<" ";
-        //plainfile << '>' << newNodeNum;
-        //C_new+=newSequences[newNodeNum].length();
-        //plainfile<<endl;
         myfile<<endl;
         
         plainfile<<newSequences[newNodeNum];
@@ -1524,28 +1413,12 @@ void formattedOutputForwardExt(Graph &G){
     //myfile << '>' << newNodeNum <<">0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:- " ;
     myfile.close();
     plainfile.close();
-    
 }
 
 
-int maximumUnitigLength(){
-    int m = 0;
-    for(unitig_struct_t u: unitigs){
-        if(u.ln > m){
-            m = u.ln;
-        }
-    }
-    return m;
-}
-
-int get_data(const string& unitigFileName,
-             uchar*& data,
-             vector<unitig_struct_t>& unitigs,
-             uint64_t& char_count
-             ) {
+int read_unitig_file(const string& unitigFileName, vector<unitig_struct_t>& unitigs) {
     ifstream unitigFile;
     unitigFile.open(unitigFileName);
-    
     
     string line;
     
@@ -1627,41 +1500,8 @@ int get_data(const string& unitigFileName,
     
     unitigFile.close();
     
-    cout << "Complete reading input." << endl;
-    
+    cout << "Complete reading input unitig file (bcalm2 file)." << endl;
     return EXIT_SUCCESS;
-}
-
-pair<int, int> getFileSizeKB(string fn = "plainOutput.txt"){
-    pair<int, int> sizeBeforeAfter;
-    
-    string fngz = fn+".gz"; //"plainOutput.fa.gz";
-    string countFile = "incount.txt";
-    ostringstream stringStream;
-    string copyOfStr;
-    string line;
-    
-    system(("du -k " + fn + " | cut -f1 > "  + countFile).c_str()); // du -h plainOutput.fa | cut -f1 > incount.txt
-    ifstream cf;
-    cf.open(countFile);
-    getline(cf, line);
-    line = delSpaces(line);
-    sscanf(line.c_str(), "%d", &sizeBeforeAfter.first);
-    cf.close();
-    
-  
-    
-    system(("gzip "+fn + " \n" + " du -k " + fngz + " | cut -f1 > "  + countFile).c_str()); // du -h plainOutput.fa.gzip | cut -f1 > incount.txt
-    cf.open(countFile);
-    getline(cf, line);
-    line = delSpaces(line);
-    sscanf(line.c_str(), "%d", &sizeBeforeAfter.second);
-    cf.close();
-    
-    //sizeBeforeAfter.first *= 1024*8;
-    //sizeBeforeAfter.second *= 1024*8;
-    system("rm -rf incount.txt");
-    return sizeBeforeAfter;
 }
 
 set<int> extractIntegerWords(string str)
@@ -1688,6 +1528,50 @@ set<int> extractIntegerWords(string str)
         temp = "";
     }
     return retset;
+}
+
+
+
+// might be useful for doing some visualization.
+bool canReachSinkSource(int v, bool visited[], bool sign)
+{
+    // Mark the current node as visited and
+    // print it
+    
+    visited[v] = true;
+    //cout << v << " ";
+    bool reachable = false;
+    
+    if(global_plusoutdegree[v] == 0 && global_plusindegree[v] != 0){
+        //cout<<v<<"is sink.";
+        return true;//sink
+        
+    }
+    if(global_plusindegree[v] == 0 && global_plusoutdegree[v] != 0){
+        //cout<<v<<"is source.";
+        return true;//source
+    }
+    if(global_indegree[v] == 0){
+        //cout<<v<<"is isolated.";
+        return true;//isolated
+    }
+    
+    
+    // Recur for all the vertices adjacent
+    // to this vertex
+    vector<edge_t>::iterator i;
+    for (i = adjList[v].begin(); i != adjList[v].end(); ++i){
+        
+        if (!visited[(*i).toNode] && sign==(*i).left){
+            reachable = canReachSinkSource((*i).toNode, visited, (*i).right);
+            if(reachable==true){
+                return true;
+            }
+        }
+        
+    }
+    return reachable;
+    
 }
 
 void makeGraphDot(string ipstr){
@@ -1744,10 +1628,13 @@ void makeGraphDot(string ipstr){
 int main(int argc, char** argv) {
     FILE * statFile;
     statFile = fopen (("stats"+modefilename[ALGOMODE]+".txt").c_str(),"w");
-
-//    string debugFileName = "debug.txt";
-//    ofstream debugFile;
-//    debugFile.open(debugFileName);
+    
+    ofstream globalStatFile;
+    globalStatFile.open("global_stat", std::fstream::out | std::fstream::app);
+    
+    //    string debugFileName = "debug.txt";
+    //    ofstream debugFile;
+    //    debugFile.open(debugFileName);
     
     
     const char* nvalue = "" ;
@@ -1818,12 +1705,10 @@ int main(int argc, char** argv) {
     }
     
     
-    uint64_t char_count;
-    uchar *data = NULL;
     
     double startTime = readTimer();
     cout << "## START reading file: " << UNITIG_FILE << ": K = "<<K<<endl;
-    if (EXIT_FAILURE == get_data(UNITIG_FILE, data, unitigs, char_count)) {
+    if (EXIT_FAILURE == read_unitig_file(UNITIG_FILE, unitigs)) {
         return EXIT_FAILURE;
     }
     infile.close();
@@ -1834,34 +1719,29 @@ int main(int argc, char** argv) {
     Graph G;
     
     //count total number of edges
-    int E = 0;
+    int E_bcalm = 0;
     for (int i = 0; i < G.V; i++) {
-        E += adjList[i].size();
+        E_bcalm += adjList[i].size();
     }
-    int V = G.V;
+    int V_bcalm = G.V;
     int numKmers = 0;
-    int C = 0;
+    int C_bcalm = 0;
     
     for (unitig_struct_t unitig : unitigs) {
-        C += unitig.ln;
+        C_bcalm += unitig.ln;
         numKmers +=  unitig.ln - K + 1;
     }
     
-//    if(DBGFLAG == NODENUMBER_DBG){
-//        cout<<"Total Nodes: "<<V<<" Edges: "<<E<<" K-mers: "<<numKmers<<endl;
-//    }
+    //    if(DBGFLAG == NODENUMBER_DBG){
+    //        cout<<"Total Nodes: "<<V<<" Edges: "<<E<<" K-mers: "<<numKmers<<endl;
+    //    }
     
     cout<<"## START gathering info about upper bound. "<<endl;
     double time_a = readTimer();
     G.indegreePopulate();
     
     cout<<"TIME for information gather: "<<readTimer() - time_a<<" sec."<<endl;
-    
-    delete [] global_indegree;
-    delete [] global_outdegree;
-    delete [] global_plusindegree;
-    delete [] global_plusoutdegree;
-    
+
     
     if(ALGOMODE == GRAPHPRINT){
         char sss[1000];
@@ -1880,9 +1760,9 @@ int main(int argc, char** argv) {
     
     
     int walkstarting_node_count = ceil((sharedparent_count + sink_count + source_count)/2.0) + isolated_node_count;
-    int charLowerbound = C-(K-1)*(G.V - walkstarting_node_count*1.0);
-    float upperbound = (1-((C-(K-1)*(G.V - walkstarting_node_count*1.0))/C))*100.0;
-    
+    int charLowerbound = C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0);
+    float upperbound = (1-((C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0))/C_bcalm))*100.0;
+
     printf( "%d\t\
            %d\t\
            %d\t\
@@ -1898,9 +1778,9 @@ int main(int argc, char** argv) {
            %.2f%%\t",
            K,
            numKmers,
-           V,
-           E,
-           C,
+           V_bcalm,
+           E_bcalm,
+           C_bcalm,
            charLowerbound,
            (charLowerbound*2.0)/numKmers,
            upperbound,
@@ -1908,33 +1788,56 @@ int main(int argc, char** argv) {
            sink_count,
            source_count,
            sharedparent_count,
-           sharedparent_count*100.0/V
+           sharedparent_count*100.0/V_bcalm
            );
     
+    
+
+    globalStatFile << "K" <<  "=" << K << endl;
+    globalStatFile << "N_KMER" <<  "=" << numKmers << endl;
+    globalStatFile << "V_BCALM" <<  "=" << V_bcalm << endl;
+    globalStatFile << "E_BCALM" <<  "=" << E_bcalm << endl;
+    globalStatFile << "C_BCALM" <<  "=" << C_bcalm << endl;
+    globalStatFile << "C_LB" <<  "=" << charLowerbound << endl;
+    globalStatFile << "V_LB" <<  "=" << walkstarting_node_count << endl;
+    globalStatFile << "N_ISOLATED" <<  "=" << isolated_node_count << endl;
+    globalStatFile << "N_SINK" <<  "=" << sink_count << endl;
+    globalStatFile << "N_SOURCE" <<  "=" << source_count << endl;
+    globalStatFile << "N_SPECIAL" <<  "=" << sharedparent_count << endl;
+    
+    //OPTIONAL;DERIVABLE
+    globalStatFile << "BITSKMER_LB" <<  "=" << (charLowerbound*2.0)/numKmers << endl;
+    globalStatFile << "PERCENT_UB" <<  "=" << upperbound <<  "%" << endl;
+    globalStatFile << "PERCENT_N_SPECIAL" <<  "=" << sharedparent_count*100.0/V_bcalm <<"%" << endl;
+    
+
     for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
-        printf("%.2f%%\t", (i->second)*100.0/V);
+        printf("%.2f%%\t", (i->second)*100.0/V_bcalm);
+        globalStatFile << "PERCENT_DEGREE_"<<(i->first).first << "_" << (i->first).second <<  "=" << (i->second)*100.0/V_bcalm <<"%" << endl;
     }
     printf("%.2f%%\t\
            %.2f%%\t",
-           isolated_node_count*100.0/V,
-           (sink_count+source_count)*100.0/V);
-    //fprintf(statFile, "\n");
+           isolated_node_count*100.0/V_bcalm,
+           (sink_count+source_count)*100.0/V_bcalm);
+    //OPTIONAL; derivable
+    globalStatFile << "PERCENT_N_ISOLATED" <<  "=" << isolated_node_count*100.0/V_bcalm <<"%" << endl;
+    globalStatFile << "PERCENT_N_DEADEND" <<  "=" << (sink_count+source_count)*100.0/V_bcalm <<"%" << endl;
 
     // Iterating the map and printing ordered values
-//    for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
-//        cout << "(" << i->first.first<< ", "<< i->first.second << ")" << " := " << i->second << '\n';
-//    }
+    //    for (auto i = inOutCombo.begin(); i != inOutCombo.end(); i++) {
+    //        cout << "(" << i->first.first<< ", "<< i->first.second << ")" << " := " << i->second << '\n';
+    //    }
     
     if(ALGOMODE == PROFILE_ONLY){
         printf("\n");
         return 0;
     }
-
     
-//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//
-//##################################################//
-//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//
-//##################################################//
+    
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//
+    //##################################################//
+    //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//
+    //##################################################//
     
     //STARTING DFS
     cout<<"## START DFS: "<<endl;
@@ -1952,89 +1855,73 @@ int main(int argc, char** argv) {
             cout<<endl;
         }
     }
- 
     
-    //Stats after all done
-    //int V_new = G.countNewNode;
-    //int C_new = 0;
     
     double TIME_TOTAL_SEC = readTimer() - startTime;
-//    map<int, string>::iterator it;
-//    int maxlen = 0;
-//    for (it = newSequences.begin(); it != newSequences.end(); it++)
-//    {
-//        C_new += (it->second).length();
-//        if((it->second).length() >maxlen){
-//            maxlen =(it->second).length();
-//        }
-//    }
     
-
     // For collecting stats
     //int U_MAX = maximumUnitigLength();
-    
-    
     
     time_a = readTimer();
     
     
     if(ALGOMODE==BRACKETCOMP){
-        //formattedOutputForwardExt(G);
-        C_new = C_bracketed;
-        V_new  = V_bracketed;
-        //V_new = G.countNewNode;
+        C_ustitch = C_tip_ustitch;
+        V_ustitch  = V_tip_ustitch;
     }else if(ALGOMODE == TWOWAYEXT){
-        V_new = V_twoway;
-        C_new = C_twoway;
+        V_ustitch = V_twoway_ustitch;
+        C_ustitch = C_twoway_ustitch;
     }else if(ALGOMODE == BASIC){
         formattedOutputForwardExt(G);
-        V_new = G.countNewNode;
-        //C_new = C_new;
+        V_ustitch = G.countNewNode;
     }else{
         formattedOutputForwardExt(G);
-        V_new = G.countNewNode;
-        //C_new = C_new;
+        V_ustitch = G.countNewNode;
     }
+    
     
     cout<<"TIME to output: "<<readTimer() - time_a<<" sec."<<endl;
     
     
-    
-    
-    
-   float percent_saved_c = (1-(C_new*1.0/C))*100.0;
-    float theoreticalBitsKmerSaved;
+    float percent_saved_c = (1-(C_ustitch*1.0/C_bcalm))*100.0;
+    float ustitchBitsPerKmer;
     if(ALGOMODE== BRACKETCOMP){
-         theoreticalBitsKmerSaved =C_new*3.0/numKmers;
+        ustitchBitsPerKmer =C_ustitch*3.0/numKmers;
     }else{
-         theoreticalBitsKmerSaved =C_new*2.0/numKmers;
+        ustitchBitsPerKmer =C_ustitch*2.0/numKmers;
     }
-   
+    
     
     printf("%s\t",  mapmode[ALGOMODE].c_str());
     printf("%d\t\
-            %.2f%%\t\
-            %.2f%%\t\
+           %.2f%%\t\
+           %.2f%%\t\
            %d\t\
            %.2f\t",
-           V_new,
+           V_ustitch,
            percent_saved_c,
-            upperbound - percent_saved_c,
-           C_new,
-           theoreticalBitsKmerSaved
-            );
+           upperbound - percent_saved_c,
+           C_ustitch,
+           ustitchBitsPerKmer
+           );
     printf("%.2f\t\
            %.2f\t",
            TIME_READ_SEC,
            TIME_TOTAL_SEC
            );
-//    fprintf(statFile, "%.2f\t\
-//           %.2f\t",
-//           getFileSizeKB().first*1.0/numKmers*1024*8,
-//           getFileSizeKB().second*1.0/numKmers*1024*8);
     printf("\n");
     printf("\n");
     
+    //globalStatFile << "USTITCH_MODE" <<  "=" << mapmode[ALGOMODE].c_str() << endl;
+    globalStatFile << "V_USTITCH_" << mapmode[ALGOMODE].c_str() <<  "=" << V_ustitch << endl;
+    globalStatFile << "PERCENT_C_SAVED_" << mapmode[ALGOMODE].c_str() <<  "=" << percent_saved_c << "%" << endl;
+    globalStatFile << "PERCENT_C_GAP_WITH_UB_" << mapmode[ALGOMODE].c_str() <<  "=" << upperbound - percent_saved_c << "%" << endl;
+    globalStatFile << "C_USTITCH_" << mapmode[ALGOMODE].c_str() <<   "=" <<C_ustitch << endl;
+    globalStatFile << "BITSKMER_USTITCH_" << mapmode[ALGOMODE].c_str() <<  "=" <<ustitchBitsPerKmer << endl;
+    globalStatFile << "TIME_READINPUT_SEC_" << mapmode[ALGOMODE].c_str() <<  "=" <<TIME_READ_SEC << endl;
+    globalStatFile << "TIME_TOTAL_SEC_" << mapmode[ALGOMODE].c_str() <<  "=" <<TIME_TOTAL_SEC << endl;
+    
+    globalStatFile.close();
     fclose(statFile);
     return EXIT_SUCCESS;
 }
