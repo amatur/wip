@@ -43,7 +43,7 @@ bool sort_by_tipstatus (const mytuple &lhs, const mytuple &rhs){
     return get<3>(lhs) < get<3>(rhs);
 }
 
-bool DEBUGMODE = false;
+bool DEBUGMODE = true;
 int K = 31;
 string UNITIG_FILE = "/Volumes/exFAT/data2019/staphsub/31/list_reads.unitigs.fa";
 int C_twoway = 0;
@@ -1088,22 +1088,22 @@ public:
                     int commonWalkId = lst.at(0);
                     
                     int posOffset = 1;
+                    
+                    int lastWalk = -1;
                     for(auto i: lst){
                         // i is new walk id before merging
                         merged[i] = true;
                         mergeString = plus_strings(mergeString, newSequences[i], K);
                         walkFirstNode[i] = headOfThisWalk;
-                        
+
                         // travesing the walk list of walk ID i
                         for(int uid: newToOld[i]){
                             oldToNew[uid].serial = commonWalkId;
                             oldToNew[uid].finalWalkId = commonWalkId;
                             oldToNew[uid].pos_in_walk = posOffset++;
-                            
                         }
-                        oldToNew[newToOld[i].back()].isWalkEnd = true;
-                        
                     }
+                    oldToNew[newToOld[lst.back()].back()].isWalkEnd = true;
                     
                     
                     newNewSequences[headOfThisWalk] = mergeString;
@@ -1148,6 +1148,34 @@ public:
         }
         
         
+        
+        //BRACKETCOMP encoder and printer::::
+        if(0==0){
+            vector<mytuple> sorter;
+            for(int uid = 0 ; uid< V; uid++){
+                
+                new_node_info_t nd = oldToNew[uid];
+                
+                
+                //if(!global_issinksource[uid]){
+                sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
+                //}
+                
+            }
+            stable_sort(sorter.begin(),sorter.end(),sort_by_tipstatus);
+            stable_sort(sorter.begin(),sorter.end(),sort_by_pos);
+            stable_sort(sorter.begin(),sorter.end(),sort_by_walkId);
+            
+            for(mytuple n : sorter){
+                int uid = get<0>(n);
+                int finalWalkId = get<1>(n);
+                int pos_in_walk = get<2>(n);
+                int isTip = get<3>(n);
+                cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<" "<<oldToNew[uid].isWalkEnd<< " was merged: "<< merged[oldToNew[uid].finalWalkId]<< endl;
+            }
+        }
+        
+        
         /// TWOWAYEXT DONE: NOW LET"S DO BRACK COMP
         
         
@@ -1179,8 +1207,8 @@ public:
                 for (auto const& x : sinkSrcEdges)
                 {
                     int sinksrc = x.first;
-                    if(sinksrc == 324 || sinksrc == 349){
-                        
+                    if(sinksrc == 3997){
+                        // || sinksrc == 3997
                     }
                     for(edge_t e: x.second){
                         
