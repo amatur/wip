@@ -43,8 +43,9 @@ bool sort_by_tipstatus (const mytuple &lhs, const mytuple &rhs){
     return get<3>(lhs) < get<3>(rhs);
 }
 
-int K = 55;
-string UNITIG_FILE = "/Volumes/exFAT/data2019/chol/55/list_reads.unitigs.fa";
+bool DEBUGMODE = false;
+int K = 31;
+string UNITIG_FILE = "/Volumes/exFAT/data2019/staphsub/31/list_reads.unitigs.fa";
 int C_twoway = 0;
 int C_bracketed = 0;
 int V_twoway = 0;
@@ -60,7 +61,7 @@ enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS
 bool FLG_NEWUB = true;
 
 DEBUGFLAG_T DBGFLAG = NONE; //NODENUMBER_DBG
-ALGOMODE_T ALGOMODE = TWOWAYEXT;
+ALGOMODE_T ALGOMODE = BRACKETCOMP;
 
 string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "two_way_extension", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "bracket_comp"
 };
@@ -76,7 +77,7 @@ typedef struct {
     int startPosWithKOverlap;
     int endPosWithKOVerlap;
     bool isWalkEnd = false;
-    int pos_in_walk = -1;
+    int pos_in_walk = -100;
     int finalWalkId = -1; // renders some walkId as invalid
     int isTip = 0;
 } new_node_info_t;
@@ -1150,13 +1151,15 @@ public:
         /// TWOWAYEXT DONE: NOW LET"S DO BRACK COMP
         
         
-        bool* hasSinkconn = new bool[V];
+        bool* hasStartTip = new bool[V];
+        bool* hasEndTip = new bool[V];
         for (int i = 0; i<V; i++) {
-            hasSinkconn[i] = false;
+            hasStartTip[i] = false;
+            hasEndTip[i] = false;
         }
         //@@@@@ BRACKETED
         
-        if(1 == 0){
+        if(2 == 0){
             for (int sinksrc = 0; sinksrc<V; sinksrc++) {
                 if(global_issinksource[sinksrc] == 1){
                     list<int> xxx;
@@ -1172,16 +1175,20 @@ public:
             }
         }
         if(ALGOMODE == BRACKETCOMP){
-            if(0==0){
+            if(2==2){
                 for (auto const& x : sinkSrcEdges)
                 {
                     int sinksrc = x.first;
+                    if(sinksrc == 324 || sinksrc == 349){
+                        
+                    }
                     for(edge_t e: x.second){
                         
                         // can this occur?
                         if(color[sinksrc] != 'w'){
                             break;
                         }
+                          
                         //there are 3 cases
                         //if consistent this way [[[if(nodeSign[e.toNode] == e.right)]]]
                         //case fwd1: sinksrc -> contig start
@@ -1207,18 +1214,21 @@ public:
                                 color[sinksrc] = 'l';
                                 oldToNew[sinksrc].serial = whichwalk;
                                 oldToNew[sinksrc].finalWalkId = whichwalk;
-                                oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk;
+                                oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk - 1;
+                                assert(oldToNew[e.toNode].pos_in_walk != -1);
                                 
-                                //oldToNew[sinksrc].isTip = -1; // from left
-                                
-                                if(oldToNew[e.toNode].pos_in_walk == 1 && !hasSinkconn[e.toNode] ){
+                                int k = oldToNew[e.toNode].pos_in_walk;
+                                bool jjjj = hasStartTip[e.toNode];
+                                if(oldToNew[e.toNode].pos_in_walk == 1 && hasStartTip[e.toNode] == false ){
                                     oldToNew[sinksrc].isTip = 0;
-                                    hasSinkconn[e.toNode] = true;
-                                    oldToNew[sinksrc].pos_in_walk--;
+                                    hasStartTip[e.toNode] = true;
+                                    oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk - 1 ;
+                                    int j = oldToNew[sinksrc].pos_in_walk;
+                                    
                                 }else{
-                                    oldToNew[sinksrc].isTip = -1;
+                                    oldToNew[sinksrc].isTip = 2;
                                 }
-                                
+
                                 
                                 
                                 
@@ -1247,12 +1257,12 @@ public:
                                 oldToNew[sinksrc].serial = whichwalk;
                                 oldToNew[sinksrc].finalWalkId = whichwalk;
                                 oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk ;
+                                assert(oldToNew[e.toNode].pos_in_walk != -1);
                                 
-                                
-                                if(oldToNew[e.toNode].isWalkEnd == true && !hasSinkconn[e.toNode] ){
+                                if(oldToNew[e.toNode].isWalkEnd == true && !hasEndTip[e.toNode] ){
                                     oldToNew[sinksrc].isTip = 0;
-                                    hasSinkconn[e.toNode] = true;
-                                    oldToNew[sinksrc].pos_in_walk++;
+                                    hasEndTip[e.toNode] = true;
+                                    oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk + 1;
                                 }else{
                                     oldToNew[sinksrc].isTip = 1;
                                 }
@@ -1367,7 +1377,7 @@ public:
                 if(isTip == 0){
                      walkString = plus_strings(walkString, unitigString, K);
                 }else if(isTip==1){ //right R   R    ]   ]   ]   ]
-                    //cut prefix
+                    //cut prefix: correct
                     if(0==0){
                         unitigString = unitigString.substr(K - 1, unitigString.length() - (K - 1));
                         if(walkString.length()<K){
@@ -1375,11 +1385,11 @@ public:
                         }
                         walkString += "]" + unitigString + "]";
                     }
-                    if(0==1){
+                    if(1==0){
                         tipFile<<">pref\n"<<unitigString<<endl;
                     }
                     
-                }else if(isTip==-1){ //left L   L    [ [ [
+                }else if(isTip==2){ //left L   L    [ [ [
                     //cut suffix
                     if(0==0){
                         unitigString = unitigString.substr(0, unitigString.length() - (K - 1));
@@ -1387,7 +1397,6 @@ public:
                             cout<<"pos: "<<walkString.length()<<endl;
                         }
                         walkString += "[" + unitigString + "[";
-                        
                     }
                     if(1==0){
                          tipFile<<">suf\n"<<unitigString<<endl;
@@ -1397,12 +1406,13 @@ public:
                     
                     
                 tipDebugFile<<">"<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
-                tipFile<<">"<<lastWalk<<endl;
+                //tipFile<<">"<<lastWalk<<endl;
                 
             }
             V_bracketed++;
             C_bracketed+=walkString.length();
             
+            tipFile<<">"<<lastWalk<<endl;
             tipDebugFile<< walkString;
             tipDebugFile<<endl;
             tipDebugFile.close();
@@ -1717,58 +1727,60 @@ int main(int argc, char** argv) {
     int c ;
     
     ///*
-    while( ( c = getopt (argc, argv, "i:k:m:d:f:") ) != -1 )
-    {
-        switch(c)
+    if(DEBUGMODE==false){
+        while( ( c = getopt (argc, argv, "i:k:m:d:f:") ) != -1 )
         {
-            case 'i':
-                if(optarg) nvalue = optarg;
-                break;
-            case 'f':
-                if(optarg) {
-                    FLG_NEWUB = static_cast<bool>(std::atoi(optarg));
-                }
-                break;
-            case 'm':
-                if(optarg) {
-                    ALGOMODE = static_cast<ALGOMODE_T>(std::atoi(optarg));
-                }
-                break;
-            case 'd':
-                if(optarg) {
-                    DBGFLAG = static_cast<DEBUGFLAG_T>(std::atoi(optarg));
-                }
-                break;
-            case 'k':
-                if(optarg) {
-                    K = std::atoi(optarg) ;
-                    if(K<=0){
-                        fprintf(stderr, "Error: Specify a positive k value.\n");
+            switch(c)
+            {
+                case 'i':
+                    if(optarg) nvalue = optarg;
+                    break;
+                case 'f':
+                    if(optarg) {
+                        FLG_NEWUB = static_cast<bool>(std::atoi(optarg));
+                    }
+                    break;
+                case 'm':
+                    if(optarg) {
+                        ALGOMODE = static_cast<ALGOMODE_T>(std::atoi(optarg));
+                    }
+                    break;
+                case 'd':
+                    if(optarg) {
+                        DBGFLAG = static_cast<DEBUGFLAG_T>(std::atoi(optarg));
+                    }
+                    break;
+                case 'k':
+                    if(optarg) {
+                        K = std::atoi(optarg) ;
+                        if(K<=0){
+                            fprintf(stderr, "Error: Specify a positive k value.\n");
+                            exit(EXIT_FAILURE);
+                        }
+                    }else{
+                        fprintf(stderr, "Usage: %s -k <kmer size> -i <input-file-name>\n",
+                                argv[0]);
                         exit(EXIT_FAILURE);
                     }
-                }else{
+                    break;
+                default: //
                     fprintf(stderr, "Usage: %s -k <kmer size> -i <input-file-name>\n",
                             argv[0]);
                     exit(EXIT_FAILURE);
-                }
-                break;
-            default: //
-                fprintf(stderr, "Usage: %s -k <kmer size> -i <input-file-name>\n",
-                        argv[0]);
-                exit(EXIT_FAILURE);
-                
+                    
+            }
         }
+        
+        if(K==0 || strcmp(nvalue, "")==0){
+            fprintf(stderr, "Usage: %s -k <kmer size> -i <input-file-name>\n",
+                    argv[0]);
+            exit(EXIT_FAILURE);
+        }
+        
+        
+        
+        UNITIG_FILE = string(nvalue);
     }
-    
-    if(K==0 || strcmp(nvalue, "")==0){
-        fprintf(stderr, "Usage: %s -k <kmer size> -i <input-file-name>\n",
-                argv[0]);
-        exit(EXIT_FAILURE);
-    }
-    
-    
-    
-    UNITIG_FILE = string(nvalue);
     //*/
     
     ifstream infile(UNITIG_FILE);
