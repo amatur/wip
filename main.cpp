@@ -35,6 +35,7 @@ enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, D
 enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS = 3, OUTDEGREE_DFS_1 = 4, INDEGREE_DFS_INVERTED = 5, PLUS_INDEGREE_DFS = 6, RANDOM_DFS = 7, NODEASSIGN = 8, SOURCEFIRST = 9, TWOWAYEXT = 10, PROFILE_ONLY = 11, EPPRIOR=12, GRAPHPRINT = 13, TIGHTUB = 14, BRACKETCOMP = 15};
 
 bool FLG_NEWUB = true;
+bool FLG_ABUNDANCE = false;
 
 DEBUGFLAG_T DBGFLAG = NONE; //NODENUMBER_DBG
 ALGOMODE_T ALGOMODE = BRACKETCOMP;
@@ -73,6 +74,7 @@ typedef struct {
     int ln;
     int kc;
     float km;
+    vector<string> abundances;
 } unitig_struct_t;
 
 typedef struct {
@@ -1063,30 +1065,37 @@ public:
         
         
         //BRACKETCOMP encoder and printer::::
-        //        if(0==0){
-        //            vector<mytuple> sorter;
-        //            for(int uid = 0 ; uid< V; uid++){
-        //
-        //                new_node_info_t nd = oldToNew[uid];
-        //
-        //
-        //                //if(!global_issinksource[uid]){
-        //                sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
-        //                //}
-        //
-        //            }
-        //            stable_sort(sorter.begin(),sorter.end(),sort_by_tipstatus);
-        //            stable_sort(sorter.begin(),sorter.end(),sort_by_pos);
-        //            stable_sort(sorter.begin(),sorter.end(),sort_by_walkId);
-        //
-        //            for(mytuple n : sorter){
-        //                int uid = get<0>(n);
-        //                int finalWalkId = get<1>(n);
-        //                int pos_in_walk = get<2>(n);
-        //                int isTip = get<3>(n);
-        //                cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<" "<<oldToNew[uid].isWalkEnd<< " was merged: "<< merged[oldToNew[uid].finalWalkId]<< endl;
-        //            }
-        //        }
+                if(FLG_ABUNDANCE){
+                    vector<fourtuple> sorter;
+                    for(int uid = 0 ; uid< V; uid++){
+        
+                        new_node_info_t nd = oldToNew[uid];
+        
+        
+                        //if(!global_issinksource[uid]){
+                        sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
+                        //}
+        
+                    }
+                    //stable_sort(sorter.begin(),sorter.end(),sort_by_tipstatus);
+                    stable_sort(sorter.begin(),sorter.end(),sort_by_pos);
+                    stable_sort(sorter.begin(),sorter.end(),sort_by_walkId);
+                    
+                    ofstream abun_count_file;
+                   abun_count_file.open("count_"+ mapmode[ALGOMODE] +".txt");
+                    
+                    for(fourtuple n : sorter){
+                        int uid = get<0>(n);
+                        int finalWalkId = get<1>(n);
+                        int pos_in_walk = get<2>(n);
+                        int isTip = get<3>(n);
+                        //cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<" "<<oldToNew[uid].isWalkEnd<< " was merged: "<< merged[oldToNew[uid].finalWalkId]<< endl;
+                        for(string abun: unitigs[uid].abundances){
+                            abun_count_file<<abun<<endl;
+                        }
+                    }
+                    abun_count_file.close();
+                }
         
         
         // clean up
@@ -1434,19 +1443,46 @@ int read_unitig_file(const string& unitigFileName, vector<unitig_struct_t>& unit
     
     do {
         unitig_struct_t unitig_struct;
-        edgesline[0] = '\0';
-        sscanf(line.c_str(), "%*c %d %s  %s  %s %[^\n]s", &unitig_struct.serial, lnline, kcline, kmline, edgesline);
         
-        // @@DEBUG
-        //        if(unitig_struct.serial == 1241914){
-        //            cout<<line<<endl;
-        //            cout<<edgesline<<endl;
-        //        }
-        //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
+        if(FLG_ABUNDANCE){
+            //>3 LN:i:24 ab:Z:10 10 10 10 10 7 7 7 7 7 3 3 3 3   L:-:0:+ L:-:1:+  L:+:0:-
+            edgesline[0] = '\0';
+            sscanf(line.c_str(), "%*c %d %s", &unitig_struct.serial, lnline);
+            sscanf(lnline, "%*5c %d", &unitig_struct.ln);
+            
+            int abpos = line.find("ab") + 5;
+            int Lpos = line.find("L:");
+            
+
+            // initialize string stream
+            //cout<<line.substr(abpos, Lpos - abpos);
+            stringstream ss(line.substr(abpos, Lpos - abpos));
+            string abun;
+            while( getline( ss, abun, ' ' ) )
+            {
+                if(abun!=""){
+                    unitig_struct.abundances.push_back(abun);
+                }
+            }
+            
+            assert(unitig_struct.abundances.size() == unitig_struct.ln - K + 1);
+            
+            
+           sscanf(line.substr(Lpos, line.length() - Lpos).c_str(), "%[^\n]s", edgesline);
+            
+        }else{
+            edgesline[0] = '\0';
+            sscanf(line.c_str(), "%*c %d %s  %s  %s %[^\n]s", &unitig_struct.serial, lnline, kcline, kmline, edgesline);
         
-        sscanf(lnline, "%*5c %d", &unitig_struct.ln);
-        sscanf(kcline, "%*5c %d", &unitig_struct.kc);
-        sscanf(kmline, "%*5c %f", &unitig_struct.km);
+            //>0 LN:i:13 KC:i:12 km:f:1.3  L:-:0:- L:-:2:-  L:+:0:+ L:+:1:-
+            
+            
+            sscanf(lnline, "%*5c %d", &unitig_struct.ln);
+            sscanf(kcline, "%*5c %d", &unitig_struct.kc);
+            sscanf(kmline, "%*5c %f", &unitig_struct.km);
+        }
+        
+        
         
         char c1, c2;
         stringstream ss(edgesline);
@@ -1457,9 +1493,7 @@ int read_unitig_file(const string& unitigFileName, vector<unitig_struct_t>& unit
                 if(DBGFLAG==VERIFYINPUT){
                     cout<<line<<endl;
                 }
-                //                if(unitig_struct.serial == 1241914){
-                //                    cout<<line<<endl;
-                //                }
+
                 sscanf(line.c_str(), "%*2c %c %*c %d  %*c  %c", &c1, &nodeNum, &c2); //L:-:0:-
                 edge_t newEdge;
                 
@@ -1643,10 +1677,15 @@ int main(int argc, char** argv) {
     
     ///*
     if(DEBUGMODE==false){
-        while( ( c = getopt (argc, argv, "i:k:m:d:f:") ) != -1 )
+        while( ( c = getopt (argc, argv, "i:k:m:d:f:a:") ) != -1 )
         {
             switch(c)
             {
+                case 'a':
+                    if(optarg) {
+                        FLG_ABUNDANCE = static_cast<bool>(std::atoi(optarg));
+                    }
+                    break;
                 case 'i':
                     if(optarg) nvalue = optarg;
                     break;
