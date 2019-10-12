@@ -4,8 +4,13 @@ CFLAGS=-c -w -std=c++11 -O2
 SOURCES=main.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
 EXECUTABLE=main.out
-BCALMFILE=/Volumes/exFAT/data2019/phi/11/list_reads.unitigs.fa
-K=11
+#BCALMFILE=minitip.unitigs.fa
+#K=11
+
+#BCALMFILE=/Volumes/exFAT/data2019/phi/11/list_reads.unitigs.fa
+#K=11
+BCALMFILE=/Volumes/exFAT/data2019/staphsub/31/list_reads.unitigs.fa
+K=31
 
 all: $(SOURCES) $(EXECUTABLE) decoderd
 
@@ -25,27 +30,26 @@ clean:
 
 .SILENT:run
 
-run:
-	#rm -f *.txt *.fa
-	./main.out -i  $(BCALMFILE) -k $(K) -f 0 -m 15 > myout.txt
-	./decoder.out -i tipOutput.txt -k $(K) > decot.txt
+test:
+	./main.out -i  $(BCALMFILE) -k $(K) -f 1 -m 10 -a 1
 
-	open decot.txt
-	/Volumes/exFAT/work/validation.sh $(BCALMFILE) $(K) 
+run:
+	rm -f global_stat
+	#./main.out -i  $(BCALMFILE) -k $(K) -f 1 -m 15 > myout.txt
+	#./decoder.out -i tipOutput.txt -k $(K) > decot.txt
+	./main.out -i  $(BCALMFILE) -k $(K) -f 1 -m 10 -a 1
+
+	#/Volumes/exFAT/work/validation.sh $(BCALMFILE) $(K) 
+	#./gzipper.sh
+
 	#./main.out -i /Volumes/exFAT/data2019/chol31/list_reads.unitigs.fa -f 1 -m 11 -k 31 > myout.txt
 	#./main.out -i /Volumes/exFAT/data2019/chol/31/list_reads.unitigs.fa  -k 31 -f 1 -m 0 > myout0.txt
 	#./main.out -i /Volumes/exFAT/data2019/chol/31/list_reads.unitigs.fa  -k 31 -f 1 -m 10 > myout10.txt
 	#./main.out -i /Volumes/exFAT/data2019/staph31/list_reads.unitigs.fa  -k 31 -f 1 -m 0 > myout15.txt
 	#cat myout.txt 
 
-	#cp stats.txt stats_sidedub.txt
 
-	#cat stats_sidedub.txt
-	#cat stats.txt
-	
-	#open myout0.txt
-	#open myout10.txt
-	open myout.txt
+	#open myout.txt
 
 	#./validation.sh /Volumes/exFAT/data2019/chol/55/list_reads.unitigs.fa 55  
 	
