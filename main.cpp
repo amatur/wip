@@ -975,7 +975,7 @@ public:
             system(("awk '(NR%2)' "+UNITIG_FILE+" | cut -f 5 -d ':' | cut -f 1 -d 'L' > count.usttemp").c_str()); // get a separate count file
             system("paste -d' ' uidSeq.usttemp seq.usttemp count.usttemp > merged.usttemp ");
             system("sort -n -k 1 -o merged.usttemp merged.usttemp");
-            system("cat  merged.usttemp  | awk '{for (i=4;i<=NF;i+=1) print $i}' > ab_count.txt");
+            system("cat  merged.usttemp  | awk '{for (i=4;i<=NF;i+=1) print $i}' > count_twoway.txt");
         }else{
             system("paste -d' ' uidSeq.usttemp seq.usttemp > merged.usttemp ");
             system("sort -n -k 1 -o merged.usttemp merged.usttemp");
@@ -984,7 +984,7 @@ public:
        
         
         ifstream sequenceStringFile ("seq.usttemp");
-        ofstream ustOutputFile ("ustOutput.fa");
+        ofstream ustOutputFile ("stitchedUnitigs.fa");
         //both string and abundance sort
         //keep string only and output
         //open the string file
