@@ -859,6 +859,7 @@ public:
             ofstream uidSequenceFile;
             uidSequenceFile.open("uidSeq"+modefilename[ALGOMODE]+".txt");
             
+          
             for ( const auto& p: gmerge.fwdWalkId)
             {
                 if(gmerge.fwdVisited[p.first] == false){
@@ -985,6 +986,8 @@ public:
         
         ifstream sequenceStringFile ("seq.usttemp");
         ofstream ustOutputFile ("stitchedUnitigs.fa");
+        ofstream smallKFile("smallK.fa");
+                  
         //both string and abundance sort
         //keep string only and output
         //open the string file
@@ -1016,6 +1019,15 @@ public:
                             C_twoway_ustitch+=walkString.length();
                             
                             ustOutputFile<< walkString<<endl;
+                        }else{
+                            smallKFile<<">\n"<< walkString+"A" <<endl;
+                            smallKFile<<">\n"<< walkString+"C" <<endl;
+                            smallKFile<<">\n"<< walkString+"G" <<endl;
+                            smallKFile<<">\n"<< walkString+"T" <<endl;
+                            smallKFile<<">\n"<< "A"+walkString <<endl;
+                            smallKFile<<">\n"<< "C"+walkString <<endl;
+                            smallKFile<<">\n"<< "G"+walkString <<endl;
+                            smallKFile<<">\n"<< "T"+walkString <<endl;
                         }
                     }
                     
@@ -1028,11 +1040,24 @@ public:
                 
                 //ustOutputFile<<">"<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<endl;
             }
-            ustOutputFile<<">"<<endl;
-           C_twoway_ustitch+=walkString.length();
-           
-           ustOutputFile<< walkString<<endl;
+             if(walkString.length()>=K){
+               ustOutputFile<<">"<<endl;
+               C_twoway_ustitch+=walkString.length();
+               
+               ustOutputFile<< walkString<<endl;
+           }else{
+               smallKFile<<">\n"<< walkString+"A" <<endl;
+               smallKFile<<">\n"<< walkString+"C" <<endl;
+               smallKFile<<">\n"<< walkString+"G" <<endl;
+               smallKFile<<">\n"<< walkString+"T" <<endl;
+               smallKFile<<">\n"<< "A"+walkString <<endl;
+               smallKFile<<">\n"<< "C"+walkString <<endl;
+               smallKFile<<">\n"<< "G"+walkString <<endl;
+               smallKFile<<">\n"<< "T"+walkString <<endl;
+           }
+
             sequenceStringFile.close();
+            smallKFile.close();
             system("rm -rf *.usttemp");
         }
 
