@@ -1011,10 +1011,12 @@ public:
                     if(lastWalk != -1){
                         //print previous walk
                         //ustOutputFile<<">"<<lastWalk << " " << uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<endl;
-                        ustOutputFile<<">"<<endl;
-                        C_twoway_ustitch+=walkString.length();
-                        
-                        ustOutputFile<< walkString<<endl;
+                        if(walkString.length()>=K){
+                            ustOutputFile<<">"<<endl;
+                            C_twoway_ustitch+=walkString.length();
+                            
+                            ustOutputFile<< walkString<<endl;
+                        }
                     }
                     
                     //start a new walk
