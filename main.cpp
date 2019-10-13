@@ -1406,9 +1406,9 @@ int read_unitig_file(const string& unitigFileName, vector<unitig_struct_t>& unit
                 
                 bool DELSELFLOOP=true;
                 if(DELSELFLOOP){
-                    if(unitig_struct.ln < K){
-                        cout<<"WARNING: SEQUENCE WITH LENGTH SMALLER THAN K FOUND. Omitting it. "<<endl;
-                    }
+//                    if(unitig_struct.ln < K){
+//                        cout<<"WARNING: SEQUENCE WITH LENGTH SMALLER THAN K FOUND. Omitting it. "<<endl;
+//                    }
                     if((unitig_struct.serial)!= nodeNum && unitig_struct.ln >= K ){
                         newEdge.left = charToBool(c1);
                         newEdge.right = charToBool(c2);
