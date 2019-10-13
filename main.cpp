@@ -1367,6 +1367,7 @@ int read_unitig_file(const string& unitigFileName, vector<unitig_struct_t>& unit
             edgesline[0] = '\0';
             sscanf(line.c_str(), "%*c %d %s", &unitig_struct.serial, lnline);
             sscanf(lnline, "%*5c %d", &unitig_struct.ln);
+
             
             int abpos = line.find("ab") + 5;
             int Lpos = line.find("L:");
@@ -1406,10 +1407,7 @@ int read_unitig_file(const string& unitigFileName, vector<unitig_struct_t>& unit
                 
                 bool DELSELFLOOP=true;
                 if(DELSELFLOOP){
-//                    if(unitig_struct.ln < K){
-//                        cout<<"WARNING: SEQUENCE WITH LENGTH SMALLER THAN K FOUND. Omitting it. "<<endl;
-//                    }
-                    if((unitig_struct.serial)!= nodeNum && unitig_struct.ln >= K ){
+                    if((unitig_struct.serial)!= nodeNum){
                         newEdge.left = charToBool(c1);
                         newEdge.right = charToBool(c2);
                         newEdge.toNode = nodeNum;
