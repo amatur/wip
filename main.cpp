@@ -393,12 +393,44 @@ public:
         xc = 0; // current vertex while traversing the adjacency list
         for(vector<edge_t> elist: adjList){
             int neighborCount = 0;
+            int spNeighborCount[2];
+            spNeighborCount[0]=0;
+            spNeighborCount[1]=0;
             stack<int> countedNodes;
             set<pair<int, bool> > countedSides;
             //if(true){
-            if(FLG_NEWUB){
+            if(FLG_NEWUB == true){
+                //ENDPOINT SIDE UPPER BOUND - improved
+                    for(edge_t e_xy: elist){    //central node: all neighbors of x
+                        int y = e_xy.toNode;
+                        vector<edge_t> adjY = adjList[y];
+                        bool eligibleSp = true;
+                        
+                        //pair<int, bool> pairr;
+                        for(edge_t e_from_y : adjY){    // check if this neighbor is speacial
+                            //pairr =make_pair(e_from_y.toNode, sRight(e_xy) );
+                            if(e_from_y.toNode!=xc){
+                                
+                                if(sRight(e_xy) == sLeft(e_from_y)){
+                                    eligibleSp = false;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if(eligibleSp){
+                            spNeighborCount[sLeft(e_xy)]++;
+                        }
+                    }
+                    if(spNeighborCount[0]>1){
+                        sharedparent_count += spNeighborCount[0] - 1 ;
+                    }
+                    if(spNeighborCount[1]>1){
+                        sharedparent_count += spNeighborCount[1] - 1 ;
+                    }
+            }
+            if(FLG_NEWUB == false){
                 //ENDPOINT SIDE UPPER BOUND
-                
                 for(edge_t e_xy: elist){
                     int y = e_xy.toNode;
                     vector<edge_t> adjY = adjList[y];
@@ -435,7 +467,7 @@ public:
             //sharedparent_count_wrong =sharedparent_count;
             
             //if(true){
-            if(!FLG_NEWUB){
+            if(1==0){
                 // OLDER UPPER BOUND CALC
                 
                 int neighborCount = 0;
@@ -1777,7 +1809,11 @@ int main(int argc, char** argv) {
     globalStatFile << "N_ISOLATED" <<  "=" << isolated_node_count << endl;
     globalStatFile << "N_SINK" <<  "=" << sink_count << endl;
     globalStatFile << "N_SOURCE" <<  "=" << source_count << endl;
-    globalStatFile << "N_SPECIAL" <<  "=" << sharedparent_count << endl;
+    
+    if(FLG_NEWUB)
+        globalStatFile << "N_SPECIAL_NEW" <<  "=" << sharedparent_count << endl;
+    if(!FLG_NEWUB)
+        globalStatFile << "N_SPECIAL_OLD" <<  "=" << sharedparent_count << endl;
     
     //OPTIONAL;DERIVABLE
     globalStatFile << "BITSKMER_LB" <<  "=" << (charLowerbound*2.0)/numKmers << endl;
