@@ -5,6 +5,7 @@
 //Caution:
 //removed all self-loops
 #include <cmath>
+#include <ctime>
 #include<cstring>
 #include <fstream>
 #include <iostream>
@@ -27,9 +28,12 @@
 #include <tuple>
 using namespace std;
 
+typedef signed long long int uid_int;
+
 bool DEBUGMODE = false;
-int K = 31;
-string UNITIG_FILE = "/Volumes/exFAT/data2019/staphsub/31/list_reads.unitigs.fa";
+int K = 0;
+string UNITIG_FILE = "";
+//= "/Volumes/exFAT/data2019/staphsub/31/list_reads.unitigs.fa";
 
 enum DEBUGFLAG_T { NONE = 0,  UKDEBUG = 0, VERIFYINPUT = 1, INDEGREEPRINT = 2, DFSDEBUGG = 3, PARTICULAR = 4, NODENUMBER_DBG = 5, OLDNEWMAP = 9, PRINTER = 10, SINKSOURCE = 12};
 
@@ -47,7 +51,7 @@ string modefilename[] = {"Fwd", "indegree_dfs", "indegree_dfs_initial_sort_only"
 };
 
 
-typedef tuple<int,int,int, int> fourtuple; // uid, walkid, pos, isTip
+typedef tuple<uid_int,uid_int,uid_int, char> fourtuple; // uid, walkid, pos, isTip
 
 bool sort_by_walkId (const fourtuple &lhs, const fourtuple &rhs){
     return get<1>(lhs) < get<1>(rhs);
@@ -60,17 +64,17 @@ bool sort_by_tipstatus (const fourtuple &lhs, const fourtuple &rhs){
 }
 
 typedef struct {
-    int serial = -1;
-    int startPosWithKOverlap;
-    int endPosWithKOVerlap;
+    uid_int serial = -1;
+    uid_int startPosWithKOverlap;
+    uid_int endPosWithKOVerlap;
     bool isWalkEnd = false;
-    int pos_in_walk = -100;
-    int finalWalkId = -1; // renders some walkId as invalid
-    int isTip = 0;
+    uid_int pos_in_walk = -100;
+    uid_int finalWalkId = -1; // renders some walkId as invalid
+    char isTip = 0;
 } new_node_info_t;
 
 typedef struct {
-    int serial;
+    uid_int serial;
     int ln;
 } unitig_struct_t;
 
@@ -78,26 +82,26 @@ typedef struct {
     //1 means +, 0 means -
     bool left;
     bool right;
-    int toNode;
+    uid_int toNode;
 } edge_t;
 
 typedef struct {
     edge_t edge;
-    int fromNode;
+    uid_int fromNode;
 } edge_both_t;
 
 typedef struct {
     edge_t edge;
-    int kmerStartIndex;
-    int kmerEndIndex;
+    uid_int kmerStartIndex;
+    uid_int kmerEndIndex;
 } newEdge_t;
 
-int C_ustitch = 0;
-int C_twoway_ustitch = 0;
-int C_tip_ustitch = 0;
-int V_ustitch = 0;
-int V_twoway_ustitch = 0;
-int V_tip_ustitch = 0;
+uid_int C_ustitch = 0;
+uid_int C_twoway_ustitch = 0;
+uid_int C_tip_ustitch = 0;
+uid_int V_ustitch = 0;
+uid_int V_twoway_ustitch = 0;
+uid_int V_tip_ustitch = 0;
 
 int isolated_node_count = 0;
 int sink_count = 0;
@@ -107,7 +111,7 @@ int sharparentCntRefined = 0;
 int onecount = 0;
 
 struct node_sorter {
-    int node;
+    uid_int node;
     int sortkey;
     //bool operator() (struct node_sorter  i, struct node_sorter  j) { return (i.sortkey<j.sortkey);}
 };
@@ -127,13 +131,13 @@ vector<vector<edge_t> > adjList;
 vector<vector<edge_t> > reverseAdjList;
 
 vector<unitig_struct_t> unitigs;
-map<int, string> newSequences;
-map<int, string> newNewSequences; //int is the unitig id (old id)
-set<int> newNewMarker;
+map<uid_int, string> newSequences;
+map<uid_int, string> newNewSequences; //int is the unitig id (old id)
+set<uid_int> newNewMarker;
 
-vector<list<int> > newToOld;
-vector<int> walkFirstNode; //given a walk id, what's the first node of that walk
-unordered_map<int, vector<edge_t> > sinkSrcEdges; //int is the unitig id (old id)
+vector<list<uid_int> > newToOld;
+vector<uid_int> walkFirstNode; //given a walk id, what's the first node of that walk
+unordered_map<uid_int, vector<edge_t> > sinkSrcEdges; //int is the unitig id (old id)
 
 inline string plus_strings(const string& a, const string& b, size_t kmersize) {
     if (a == "") return b;
@@ -186,8 +190,8 @@ inline string currentDateTime() {
 }
 
 
-int countOutArcs(int node) {
-    return (adjList.at(node)).size();
+int countOutArcs(uid_int node) {
+    return adjList.at(node).size();
 }
 
 
@@ -210,13 +214,13 @@ void printBCALMGraph(vector<vector<edge_t> > adjList) {
 
 class GroupMerger {
 public:
-    map<int, bool> fwdVisited;
-    map<int, bool> bwdVisited;
-    map<int, int> bwdWalkId;
-    map<int, int> fwdWalkId;
+    map<uid_int, bool> fwdVisited;
+    map<uid_int, bool> bwdVisited;
+    map<uid_int, uid_int> bwdWalkId;
+    map<uid_int, uid_int> fwdWalkId;
     GroupMerger() {
     }
-    void connectGroups(int from, int to){
+    void connectGroups(uid_int from, uid_int to){
         fwdVisited[from] = false;
         bwdVisited[to] = false;
         fwdWalkId[from] = to;
@@ -228,18 +232,18 @@ public:
 
 
 class DisjointSet {
-    unordered_map<int, int> parent;
+    unordered_map<uid_int, uid_int> parent;
     
 public:
     DisjointSet() {
     }
-    void make_set(int id) {
+    void make_set(uid_int id) {
         this->parent[id] = -1;
     }
     
-    void Union(int xId, int yId) {
-        int xset = find_set(xId);
-        int yset = find_set(yId);
+    void Union(uid_int xId, uid_int yId) {
+        uid_int xset = find_set(xId);
+        uid_int yset = find_set(yId);
         
         if(xset != yset)
         {
@@ -247,7 +251,7 @@ public:
         }
     }
     
-    int find_set(int id) {
+    uid_int find_set(uid_int id) {
         if (parent[id] == -1)
             return id;
         return find_set(parent[id]);
@@ -260,12 +264,12 @@ public:
 
 class Graph {
 public:
-    size_t V = adjList.size();
-    int countNewNode = 0;
+    uid_int V = adjList.size();
+    uid_int countNewNode = 0;
     int time = 0;
     
     char* color;
-    int* p_dfs;
+    uid_int* p_dfs;
     bool* nodeSign;
     new_node_info_t* oldToNew;
     bool* saturated;
@@ -276,7 +280,7 @@ public:
     
     Graph() {
         color = new char[V];
-        p_dfs = new int[V];
+        p_dfs = new uid_int[V];
         nodeSign = new bool[V];
         oldToNew = new new_node_info_t[V];
         saturated = new bool[V];
@@ -289,7 +293,7 @@ public:
         //global_priority = new int[V];
         countedForLowerBound = new bool[V];
         
-        for (int i = 0; i < V; i++) {
+        for (uid_int i = 0; i < V; i++) {
             
             if(ALGOMODE == TWOWAYEXT || ALGOMODE == BRACKETCOMP ){
                 disSet.make_set(i);
@@ -318,7 +322,7 @@ public:
     }
     
     void indegreePopulate(){
-        int xc = 0;
+        uid_int xc = 0;
         for(vector<edge_t> elist: adjList){
             for(edge_t e: elist){
                 global_indegree[e.toNode] += 1;
@@ -340,8 +344,8 @@ public:
                 inOutCombo[make_pair(i,j)] = 0;
             }
         }
-        for(int i = 0; i<V; i++){
-            pair<int, int> a;
+        for(uid_int i = 0; i<V; i++){
+            pair<uid_int, uid_int> a;
             a = make_pair(global_plusindegree[i], global_plusoutdegree[i]);
             inOutCombo[a] = (inOutCombo.count(a)  ? inOutCombo[a] + 1 : 1  );
             
@@ -396,13 +400,13 @@ public:
             int spNeighborCount[2];
             spNeighborCount[0]=0;
             spNeighborCount[1]=0;
-            stack<int> countedNodes;
-            set<pair<int, bool> > countedSides;
+            stack<uid_int> countedNodes;
+            set<pair<uid_int, bool> > countedSides;
             //if(true){
             if(FLG_NEWUB == true){
                 //ENDPOINT SIDE UPPER BOUND - improved
                     for(edge_t e_xy: elist){    //central node: all neighbors of x
-                        int y = e_xy.toNode;
+                        uid_int y = e_xy.toNode;
                         vector<edge_t> adjY = adjList[y];
                         bool eligibleSp = true;
                         
@@ -432,10 +436,10 @@ public:
             if(FLG_NEWUB == false){
                 //ENDPOINT SIDE UPPER BOUND
                 for(edge_t e_xy: elist){
-                    int y = e_xy.toNode;
+                    uid_int y = e_xy.toNode;
                     vector<edge_t> adjY = adjList[y];
                     bool eligible = true;
-                    pair<int, bool> pairr;
+                    pair<uid_int, bool> pairr;
                     for(edge_t e_from_y : adjY){
                         pairr =make_pair(e_from_y.toNode, sRight(e_xy) );
                         if(e_from_y.toNode!=xc){
@@ -472,7 +476,7 @@ public:
                 
                 int neighborCount = 0;
                 for(edge_t e_xy: elist){
-                    int y = e_xy.toNode;
+                    uid_int y = e_xy.toNode;
                     
                     if(!countedForLowerBound[y]){
                         vector<edge_t> adjY = adjList[y];
@@ -526,7 +530,7 @@ public:
     }
     
     
-    void DFS_visit(int u) {
+    void DFS_visit(uid_int u) {
         if(ALGOMODE == BRACKETCOMP){
             if(global_issinksource[u]==1){
                 vector<edge_t> adju = adjList.at(u);
@@ -547,7 +551,7 @@ public:
         while (!s.empty()) {
             edge_t xEdge = s.top();
             
-            int x = xEdge.toNode;
+            uid_int x = xEdge.toNode;
             s.pop();
             
             if (color[x] == 'w') {
@@ -557,6 +561,7 @@ public:
                 s.push(xEdge);
                 vector<edge_t> adjx = adjList.at(x);
                 if(ALGOMODE == RANDOM_DFS){
+                    
                     random_shuffle ( adjx.begin(), adjx.end() );
                 }
                 
@@ -613,11 +618,11 @@ public:
                 // Case 1. p[x] = -1, it can happen in two way, x is the first one ever in this connected component, or no one wanted to take x
                 // either way, if p[x] = -1, i can be representative of a new node in new graph
                 // Case 2. p[x] != -1, so x won't be the representative/head of a newHome. x just gets added to its parent's newHome.
-                int u = unitigs.at(x).ln; //unitig length
+                uid_int u = unitigs.at(x).ln; //unitig length
                 
                 if (p_dfs[x] == -1) {
                     
-                    list<int> xxx;
+                    list<uid_int> xxx;
                     xxx.push_back(x);
                     newToOld.push_back(xxx);
                     oldToNew[x].serial = countNewNode++; // countNewNode starts at 0, then keeps increasing
@@ -664,7 +669,7 @@ public:
                 
                 // x->y is the edge, x is the parent we are extending
                 for (edge_t yEdge : adjx) { //edge_t yEdge = adjx.at(i);
-                    int y = yEdge.toNode;
+                    uid_int y = yEdge.toNode;
                     
                     if(ALGOMODE == BRACKETCOMP){
                         if(global_issinksource[y] == true){
@@ -861,8 +866,8 @@ public:
         
         
         time_a = readTimer();
-        for (int j = 0; j < V; j++) {
-            int i;
+        for (uid_int j = 0; j < V; j++) {
+            uid_int i;
             if(ALGOMODE == OUTDEGREE_DFS || ALGOMODE == OUTDEGREE_DFS_1 || ALGOMODE == INDEGREE_DFS || ALGOMODE == INDEGREE_DFS_1 || ALGOMODE == SOURCEFIRST){
                 i = sortStruct[j].node;
             }else{
@@ -896,9 +901,9 @@ public:
             {
                 if(gmerge.fwdVisited[p.first] == false){
                     
-                    int fromnode =p.first;
-                    int tonode = p.second;
-                    deque<int> lst;
+                    uid_int fromnode =p.first;
+                    uid_int tonode = p.second;
+                    deque<uid_int> lst;
                     
                     lst.push_back(fromnode);
                     lst.push_back(tonode);
@@ -931,13 +936,13 @@ public:
                     }
                     
                     
-                    int headOfThisWalk = walkFirstNode[lst.at(0)]; //CHECK AGAIN
+                    uid_int headOfThisWalk = walkFirstNode[lst.at(0)]; //CHECK AGAIN
                     assert(!lst.empty());
-                    int commonWalkId = lst.at(0);
+                    uid_int commonWalkId = lst.at(0);
                     
-                    int posOffset = 1;
+                    uid_int posOffset = 1;
                     
-                    int lastWalk = -1;
+                    uid_int lastWalk = -1;
                     for(auto i: lst){
                         // i is new walk id before merging
                         merged[i] = true;
@@ -946,7 +951,7 @@ public:
                         walkFirstNode[i] = headOfThisWalk;
                         
                         // travesing the walk list of walk ID i
-                        for(int uid: newToOld[i]){
+                        for(uid_int uid: newToOld[i]){
                             oldToNew[uid].serial = commonWalkId;
                             oldToNew[uid].finalWalkId = commonWalkId;
                             oldToNew[uid].pos_in_walk = posOffset++;
@@ -958,7 +963,7 @@ public:
  
                 }
             }
-            for (int newNodeNum = 0; newNodeNum<countNewNode; newNodeNum++){
+            for (uid_int newNodeNum = 0; newNodeNum<countNewNode; newNodeNum++){
                 
                 
                 if(merged[newNodeNum] == false){
@@ -985,10 +990,10 @@ public:
         string uidSeqFilename = "uidSeq.usttemp"; //"uidSeq"+ mapmode[ALGOMODE] +".txt"
        uidSequence.open(uidSeqFilename);
         
-        int finalUnitigSerial = 0;
+        uid_int finalUnitigSerial = 0;
         for(fourtuple n : sorter){
-            int uid = get<0>(n);
-            int bcalmid = unitigs.at(uid).serial;
+            uid_int uid = get<0>(n);
+            uid_int bcalmid = unitigs.at(uid).serial;
 //                        int finalWalkId = get<1>(n);
 //                        int pos_in_walk = get<2>(n);
 //                        int isTip = get<3>(n);
@@ -1025,13 +1030,13 @@ public:
         //open the string file
         if(100==100){
             
-            int lastWalk = -1;
+            uid_int lastWalk = -1;
             string walkString = "";
             string unitigString = "";
             for(fourtuple n : sorter){
-                int uid = get<0>(n);
-                int finalWalkId = get<1>(n);
-                int pos_in_walk = get<2>(n);
+                uid_int uid = get<0>(n);
+                uid_int finalWalkId = get<1>(n);
+                uid_int pos_in_walk = get<2>(n);
    
                 //for each line in file
                 string sequenceFromFile = "";//getline
@@ -1109,7 +1114,7 @@ public:
             if(2==2){
                 for (auto const& x : sinkSrcEdges)
                 {
-                    int sinksrc = x.first;
+                    uid_int sinksrc = x.first;
                     if(sinksrc == 3997){    // @@DBG_BLOCK
                         // || sinksrc == 3997
                     }
@@ -1135,7 +1140,7 @@ public:
                         if(nodeSign[e.toNode] == e.right){  //ensure it is a fwd case
                             if(color[e.toNode]!='w' && color[e.toNode]!='r' && color[e.toNode]!='l'){//  this ensures that this to vertex is NOT sinksrc_other
                                 //case 1, 2
-                                int whichwalk = oldToNew[e.toNode].finalWalkId;
+                                uid_int whichwalk = oldToNew[e.toNode].finalWalkId;
                                 //*** case fwd1 : sinksrc -> contigStart
                                 //case fwd2. sinksrc -> contig middle/end -> ... (say that sinksrc is LEFT)
                                 //let's merge case fwd1 & fwd2
@@ -1154,7 +1159,7 @@ public:
                                     oldToNew[sinksrc].isTip = 0;
                                     hasStartTip[e.toNode] = true;
                                     oldToNew[sinksrc].pos_in_walk = oldToNew[e.toNode].pos_in_walk - 1 ;
-                                    int j = oldToNew[sinksrc].pos_in_walk;
+                                    uid_int j = oldToNew[sinksrc].pos_in_walk;
                                     
                                 }else{
                                     oldToNew[sinksrc].isTip = 2;
@@ -1166,7 +1171,7 @@ public:
                             // 3 bwd cases
                             
                             if((color[e.toNode]!='w' && color[e.toNode]!='r' && color[e.toNode]!='l')){
-                                int whichwalk = oldToNew[e.toNode].finalWalkId;
+                                uid_int whichwalk = oldToNew[e.toNode].finalWalkId;
                                 
                                 //*** case bwd1: contigend --> sinksrc
                                 //*** case bwd2: contigmiddle--> sinksrc
@@ -1212,7 +1217,7 @@ public:
             
             for (int sinksrc = 0; sinksrc<V; sinksrc++) {
                 if(global_issinksource[sinksrc] == 1 && color[sinksrc] == 'w' ){
-                    list<int> xxx;
+                    list<uid_int> xxx;
                     xxx.push_back(sinksrc);
                     newToOld.push_back(xxx);
                     oldToNew[sinksrc].serial = countNewNode++;
@@ -1229,7 +1234,7 @@ public:
             
             //BRACKETCOMP encoder and printer::::
             vector<fourtuple> sorter;
-            for(int uid = 0 ; uid< V; uid++){
+            for(uid_int uid = 0 ; uid< V; uid++){
                 new_node_info_t nd = oldToNew[uid];
                 sorter.push_back(make_tuple(uid, nd.finalWalkId, nd.pos_in_walk, nd.isTip));
             }
@@ -1244,16 +1249,16 @@ public:
             ofstream tipDebugFile;
             tipDebugFile.open("tipDebug.txt");
 
-            int lastWalk = -1;
+            uid_int lastWalk = -1;
             string walkString = "";
             string tipLessWalkString ="";
             
             ifstream sequenceStringFile ("seq.usttemp");
             
             for(fourtuple n : sorter){
-                int uid = get<0>(n);
-                int finalWalkId = get<1>(n);
-                int pos_in_walk = get<2>(n);
+                uid_int uid = get<0>(n);
+                uid_int finalWalkId = get<1>(n);
+                uid_int pos_in_walk = get<2>(n);
                 int isTip = get<3>(n);
                 //cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
                 
@@ -1424,12 +1429,12 @@ int read_unitig_file(const string& unitigFileName, vector<unitig_struct_t>& unit
         if(FLG_ABUNDANCE){
             //>3 LN:i:24 ab:Z:10 10 10 10 10 7 7 7 7 7 3 3 3 3   L:-:0:+ L:-:1:+  L:+:0:-
             edgesline[0] = '\0';
-            sscanf(line.c_str(), "%*c %d %s", &unitig_struct.serial, lnline);
+            sscanf(line.c_str(), "%*c %lld %s", &unitig_struct.serial, lnline);
             sscanf(lnline, "%*5c %d", &unitig_struct.ln);
 
             
-            int abpos = line.find("ab") + 5;
-            int Lpos = line.find("L:");
+            uid_int abpos = line.find("ab") + 5;
+            uid_int Lpos = line.find("L:");
             
             if(Lpos < 0){
                 Lpos = line.length() ;
@@ -1505,9 +1510,9 @@ int read_unitig_file(const string& unitigFileName, vector<unitig_struct_t>& unit
     return EXIT_SUCCESS;
 }
 
-set<int> extractIntegerWords(string str)
+set<uid_int> extractIntegerWords(string str)
 {
-    set<int> retset;
+    set<uid_int> retset;
     stringstream ss;
     
     /* Storing the whole string into string stream */
@@ -1515,7 +1520,7 @@ set<int> extractIntegerWords(string str)
     
     /* Running loop till the end of the stream */
     string temp;
-    int found;
+    uid_int found;
     while (!ss.eof()) {
         
         /* extracting word by word from stream */
@@ -1582,12 +1587,12 @@ void makeGraphDot(string ipstr){
     
     fprintf(fp, "digraph d {\n");
     //string ipstr = "20 19 18";
-    set<int> verticesMarked;
-    set<int> vertices = extractIntegerWords(ipstr) ;
-    set<int> vMarked(vertices.begin(), vertices.end());
+    set<uid_int> verticesMarked;
+    set<uid_int> vertices = extractIntegerWords(ipstr) ;
+    set<uid_int> vMarked(vertices.begin(), vertices.end());
     //set<pair<int, int> > edges;
     
-    for(int x: vertices){
+    for(uid_int x: vertices){
         if(x>=adjList.size()){
             cout<<"wrong, do again"<<endl;
             return;
@@ -1608,7 +1613,7 @@ void makeGraphDot(string ipstr){
             //            edges.insert(p);
         }
     }
-    for(int x: vertices){
+    for(uid_int x: vertices){
         if(vMarked.count(x)>0){
             fprintf(fp, "%d [label=\"%d\", color=\"red\"]\n", x, x);
         }else{
@@ -1627,6 +1632,7 @@ void makeGraphDot(string ipstr){
 }
 
 int main(int argc, char** argv) {
+    srand(time(NULL));
     FILE * statFile;
     statFile = fopen (("stats"+modefilename[ALGOMODE]+".txt").c_str(),"w");
     
@@ -1725,13 +1731,13 @@ int main(int argc, char** argv) {
     Graph G;
     
     //count total number of edges
-    int E_bcalm = 0;
-    for (int i = 0; i < G.V; i++) {
+    uid_int E_bcalm = 0;
+    for (uid_int i = 0; i < G.V; i++) {
         E_bcalm += adjList[i].size();
     }
-    int V_bcalm = G.V;
-    int numKmers = 0;
-    int C_bcalm = 0;
+    uid_int V_bcalm = G.V;
+    uid_int numKmers = 0;
+    uid_int C_bcalm = 0;
     
     for (unitig_struct_t unitig : unitigs) {
         C_bcalm += unitig.ln;
@@ -1765,8 +1771,8 @@ int main(int argc, char** argv) {
     }
     
     
-    int walkstarting_node_count = ceil((sharedparent_count + sink_count + source_count)/2.0) + isolated_node_count;
-    int charLowerbound = C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0);
+    uid_int walkstarting_node_count = ceil((sharedparent_count + sink_count + source_count)/2.0) + isolated_node_count;
+    uid_int charLowerbound = C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0);
     float upperbound = (1-((C_bcalm-(K-1)*(G.V - walkstarting_node_count*1.0))/C_bcalm))*100.0;
 
     printf( "%d\t\
@@ -1859,7 +1865,7 @@ int main(int argc, char** argv) {
         printNewGraph(G);
         for(int i = 0; i< G.countNewNode; i++){
             cout<<"new ->" <<i<<" ";
-            for(int x: newToOld[i]){
+            for(uid_int x: newToOld[i]){
                 cout<<x<<" ";
             }
             cout<<endl;
