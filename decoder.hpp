@@ -171,12 +171,12 @@ vector<string> decompress(string& s, int K){
 
 ///Users/Sherlock/Library/Developer/Xcode/DerivedData/bcl-awuuvnjbkkmukneqtvxvqashsbtu/Build/Products/Debug/tipOutput.txt
 ///Users/Sherlock/amaturWS/testEncoded.txt
-void processEncodedFile(int K=31, string ENCODED_FILE= "/Users/Sherlock/Library/Developer/Xcode/DerivedData/bcl-awuuvnjbkkmukneqtvxvqashsbtu/Build/Products/Debug/tipOutput.txt", string OUT_FA_FILE="/Users/Sherlock/amaturWS/absorbDecompressed.fa", string OUT_TXT_FILE="/Users/Sherlock/amaturWS/absorbDecompressed.fa"){
+void processEncodedFile(int K=31, string ENCODED_FILE= "/Users/Sherlock/Library/Developer/Xcode/DerivedData/bcl-awuuvnjbkkmukneqtvxvqashsbtu/Build/Products/Debug/tipOutput.txt", string OUT_FA_FILE="absorbDecompressed.fa", string OUT_TXT_FILE="absorbDecompressed.txt"){
     ifstream encodedFile;
     encodedFile.open(ENCODED_FILE);
     
     ofstream outFile;
-    outFile.open("absorbDecompressed.fa");
+    outFile.open(OUT_FA_FILE);
     string line;
     int nWalks = 0;
 

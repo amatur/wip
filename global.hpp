@@ -51,7 +51,7 @@ enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS
 
 bool FLG_NEWUB = true;
 
-DEBUGFLAG_T DBGFLAG = PRINTER; //NODENUMBER_DBG
+DEBUGFLAG_T DBGFLAG = NONE; //NODENUMBER_DBG
 ALGOMODE_T ALGOMODE = ONEWAYABSORPTION;
 
 bool MODE_WALK_UNION = (ALGOMODE == TWOWAYEXT);
@@ -135,6 +135,8 @@ int* global_issinksource;
 int* global_priority;
 new_node_info_t* oldToNew;
 bool* nodeSign;
+//absorber-global
+bool* obsoleteWalkId;
 int countNewNode = 0; // number of walks by ust-onewaymerge
 
 map<pair <int, int>, int> inOutCombo;
@@ -153,9 +155,12 @@ unordered_map<int, vector<edge_t> > sinkSrcEdges; //int is the unitig id (old id
 int C_ustitch = 0;
 int C_twoway_ustitch = 0;
 int C_tip_ustitch = 0;
+int C_oneabsorb = 0;
+
 int V_ustitch = 0;
 int V_twoway_ustitch = 0;
 int V_tip_ustitch = 0;
+int V_oneabsorb = 0;
 
 int isolated_node_count = 0;
 int sink_count = 0;
@@ -163,6 +168,9 @@ int source_count = 0;
 int sharedparent_count = 0;
 int sharparentCntRefined = 0;
 int onecount = 0;
+
+
+
 
 
 inline string plus_strings(const string& a, const string& b, size_t kmersize) {

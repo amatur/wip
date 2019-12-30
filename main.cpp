@@ -710,8 +710,10 @@ public:
         
         cout<<"GROUP PRINT"<<endl;
         bool* merged = new bool[countNewNode];
+        obsoleteWalkId = new bool[countNewNode];
         for (int i = 0; i<countNewNode; i++) {
             merged[i] = false;
+            obsoleteWalkId[i] = false;
         }
         
         
@@ -774,6 +776,13 @@ public:
                     for(auto i: lst){
                         // i is new walk id before merging
                         merged[i] = true;
+                        
+                        //POTENTIAL BUG
+                        if(i!=commonWalkId){
+                            obsoleteWalkId[i] = true;
+                        }
+                            
+                            
                         mergeString = plus_strings(mergeString, newSequences[i], K);
                         walkFirstNode[i] = headOfThisWalk;
                         
@@ -793,7 +802,8 @@ public:
                     //cout<<endl;
                     V_twoway_ustitch ++;
                     C_twoway_ustitch+=mergeString.length();
-                    betterfile << '>' << commonWalkId <<" LN:i:"<<mergeString.length()<<" ";
+                    //betterfile << '>' << commonWalkId <<" LN:i:"<<mergeString.length()<<" ";
+                    betterfile << '>' ;
                     betterfile<<endl;
                     
                     betterfile<<mergeString;
@@ -1071,6 +1081,8 @@ public:
         
         delete [] sortStruct;
         delete [] countedForLowerBound;
+        
+        delete [] obsoleteWalkId;
     }
 };
 
@@ -1131,7 +1143,8 @@ int main(int argc, char** argv) {
     statFile = fopen (("stats"+modefilename[ALGOMODE]+".txt").c_str(),"w");
     
     ofstream globalStatFile;
-    globalStatFile.open("global_stat", std::fstream::out | std::fstream::app);
+    //globalStatFile.open("global_stat", std::fstream::out | std::fstream::app);
+    globalStatFile.open("global_stat", std::fstream::out);
     
     //    string debugFileName = "debug.txt";
     //    ofstream debugFile;
@@ -1347,7 +1360,7 @@ int main(int argc, char** argv) {
     
     
     if(DBGFLAG == PRINTER){
-        printBCALMGraph(adjList);
+        //printBCALMGraph(adjList);
         printNewGraph(G);
         for(int i = 0; i< countNewNode; i++){
             cout<<"new ->" <<i<<" ";
@@ -1427,6 +1440,8 @@ int main(int argc, char** argv) {
     fclose(statFile);
     
     //decodeAbsorbedFile(K);
-    processEncodedFile();
+    processEncodedFile(K,"tipOutput.txt");
+    
+    
     return EXIT_SUCCESS;
 }
