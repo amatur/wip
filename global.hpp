@@ -9,7 +9,7 @@
 #ifndef global_h
 #define global_h
 
-bool DEBUGMODE = true;
+bool DEBUGMODE = false;
 
 #include <cmath>
 #include <cstring>
@@ -52,7 +52,7 @@ enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS
 bool FLG_NEWUB = true;
 
 DEBUGFLAG_T DBGFLAG = NONE; //NODENUMBER_DBG
-ALGOMODE_T ALGOMODE = ONEWAYABSORPTION;
+ALGOMODE_T ALGOMODE = BRACKETCOMP;
 
 bool MODE_WALK_UNION = (ALGOMODE == TWOWAYEXT);
 bool MODE_ABSORPTION_TIP = (ALGOMODE == BRACKETCOMP);
@@ -61,9 +61,13 @@ bool MODE_ABSORPTION_NOTIP = (ALGOMODE == ONEWAYABSORPTION || ALGOMODE == ONEWAY
 
 string mapmode[] = {"basic", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "twoway", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "tip", "one_way_absorption", "one_way_absorption_not_tested"
 };
-string modefilename[] = {"Fwd", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "Tip", "one_way_absorption", "one_way_absorption_not_tested"
+string modefilename[] = {"Fwd", "indegree_dfs", "indegree_dfs_initial_sort_only", "outdegree_dfs", "outdegree_dfs_initial_sort_only", "inverted_indegree_dfs", "plus_indegree_dfs", "random_dfs", "node_assign", "source_first", "", "profile_only", "endpoint_priority", "graph_print", "tight_ub", "Tip", "OneAbsorption", "one_way_absorption_not_tested"
 };
 
+/******
+ FILENAMES
+ 
+ */
 
 namespace MyTypes
 {
@@ -156,6 +160,10 @@ int C_ustitch = 0;
 int C_twoway_ustitch = 0;
 int C_tip_ustitch = 0;
 int C_oneabsorb = 0;
+int C_oneabsorb_ACGT = 0;
+int C_oneabsorb_brackets = 0;
+int C_oneabsorb_plusminus = 0;
+
 
 int V_ustitch = 0;
 int V_twoway_ustitch = 0;
@@ -168,10 +176,6 @@ int source_count = 0;
 int sharedparent_count = 0;
 int sharparentCntRefined = 0;
 int onecount = 0;
-
-
-
-
 
 inline string plus_strings(const string& a, const string& b, size_t kmersize) {
     if (a == "") return b;

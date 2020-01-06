@@ -821,8 +821,8 @@ public:
                 if(merged[newNodeNum] == false){
                     oldToNew[newToOld[newNodeNum].back()].isWalkEnd = true;
                     
-                    
-                    betterfile << '>' << newNodeNum <<" LN:i:"<<newSequences[newNodeNum].length()<<" ";
+                    betterfile<<'>';
+                    //betterfile << '>' << newNodeNum <<" LN:i:"<<newSequences[newNodeNum].length()<<" ";
                     betterfile<<endl;
                     
                     betterfile<<newSequences[newNodeNum];
@@ -1032,7 +1032,7 @@ public:
             stable_sort(sorter.begin(),sorter.end(),sort_by_tipstatus);
             stable_sort(sorter.begin(),sorter.end(),sort_by_pos);
             stable_sort(sorter.begin(),sorter.end(),sort_by_walkId);
-            sorter.push_back(make_tuple(0, 9999999999, 0, 0)); //dummy entry for making coding logic easier
+            //sorter.push_back(make_tuple(0, 9999999999, 0, 0)); //dummy entry for making coding logic easier
             
             //START absorbGraph
             //if you are doing both end absorption, do it here: adding **
@@ -1143,8 +1143,8 @@ int main(int argc, char** argv) {
     statFile = fopen (("stats"+modefilename[ALGOMODE]+".txt").c_str(),"w");
     
     ofstream globalStatFile;
-    //globalStatFile.open("global_stat", std::fstream::out | std::fstream::app);
-    globalStatFile.open("global_stat", std::fstream::out);
+    globalStatFile.open("global_stat", std::fstream::out | std::fstream::app);
+    //globalStatFile.open("global_stat", std::fstream::out);
     
     //    string debugFileName = "debug.txt";
     //    ofstream debugFile;
@@ -1212,6 +1212,12 @@ int main(int argc, char** argv) {
     }
     //*/
     
+    MODE_WALK_UNION = (ALGOMODE == TWOWAYEXT);
+    MODE_ABSORPTION_TIP = (ALGOMODE == BRACKETCOMP);
+    MODE_ABSORPTION_NOTIP = (ALGOMODE == ONEWAYABSORPTION || ALGOMODE == ONEWAYABSORPTION_UNTESTED);
+
+    
+    
     ifstream infile(UNITIG_FILE);
     if(!infile.good()){
         fprintf(stderr, "Error: File named \"%s\" cannot be opened.\n", UNITIG_FILE.c_str());
@@ -1245,10 +1251,6 @@ int main(int argc, char** argv) {
         C_bcalm += unitig.ln;
         numKmers +=  unitig.ln - K + 1;
     }
-    
-    //    if(DBGFLAG == NODENUMBER_DBG){
-    //        cout<<"Total Nodes: "<<V<<" Edges: "<<E<<" K-mers: "<<numKmers<<endl;
-    //    }
     
     cout<<"## START gathering info about upper bound. "<<endl;
     double time_a = readTimer();
@@ -1353,6 +1355,11 @@ int main(int argc, char** argv) {
     //@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@//
     //##################################################//
     
+    
+    
+    printf("\n\n Running in mode: %s\t \n\n",  modefilename[ALGOMODE].c_str());
+    
+    
     //STARTING DFS
     cout<<"## START DFS: "<<endl;
     G.DFS();
@@ -1374,11 +1381,7 @@ int main(int argc, char** argv) {
     
     double TIME_TOTAL_SEC = readTimer() - startTime;
     
-    // For collecting stats
-    //int U_MAX = maximumUnitigLength();
-    
     time_a = readTimer();
-    
     
     if(ALGOMODE==BRACKETCOMP){
         C_ustitch = C_tip_ustitch;
@@ -1389,6 +1392,9 @@ int main(int argc, char** argv) {
     }else if(ALGOMODE == BASIC){
         formattedOutputForwardExt(G);
         V_ustitch = countNewNode;
+    }else if(ALGOMODE == ONEWAYABSORPTION){
+        C_ustitch = C_oneabsorb;
+        V_ustitch  = V_oneabsorb;
     }else{
         formattedOutputForwardExt(G);
         V_ustitch = countNewNode;
@@ -1436,12 +1442,24 @@ int main(int argc, char** argv) {
     globalStatFile << "TIME_READINPUT_SEC_" << mapmode[ALGOMODE].c_str() <<  "=" <<TIME_READ_SEC << endl;
     globalStatFile << "TIME_TOTAL_SEC_" << mapmode[ALGOMODE].c_str() <<  "=" <<TIME_TOTAL_SEC << endl;
     
+    if(ALGOMODE == ONEWAYABSORPTION){
+    globalStatFile << "C_ONEABSORB_ACGT_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_ACGT << endl;
+        globalStatFile << "C_ONEABSORB_PLUSMINUS_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_plusminus << endl;
+        
+        globalStatFile << "C_ONEABSORB_BRACKETS_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_brackets << endl;
+       
+    }
+    
     globalStatFile.close();
     fclose(statFile);
     
-    //decodeAbsorbedFile(K);
-    processEncodedFile(K,"tipOutput.txt");
-    
+    if(MODE_ABSORPTION_TIP){
+        //decodeTip(K, "/Users/Sherlock/Library/Developer/Xcode/DerivedData/bcl-awuuvnjbkkmukneqtvxvqashsbtu/Build/Products/Debug/tipOutput.txt");
+        decodeTip(K,"tipOutput.txt");
+    }
+    if(MODE_ABSORPTION_NOTIP){
+        decodeOneAbsorb(K,"tipOutput.txt");
+    }
     
     return EXIT_SUCCESS;
 }

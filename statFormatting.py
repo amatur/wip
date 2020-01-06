@@ -1,6 +1,6 @@
 import os
 import sys
-import subprocess
+#import subprocess
 
 if(len(sys.argv)<2):
     os.chdir("/Users/Sherlock/Documents/bcl/bcl")
@@ -29,4 +29,4 @@ for i in fields:
         fout.write("%s\t" % 0)
     # print("%s\t" % (dict[i]))
 fout.close()
-subprocess.call(['open', "sub_stat.txt"])
+#subprocess.call(['open', "sub_stat.txt"])

@@ -18,7 +18,7 @@
 #include <stdint.h>
 #include <unistd.h>
 using namespace std;
-int decodeAbsorbedFile(int K, string UNITIG_FILE= "/Users/Sherlock/Library/Developer/Xcode/DerivedData/bcl-awuuvnjbkkmukneqtvxvqashsbtu/Build/Products/Debug/tipOutput.txt"){
+int decodeTip(int K, string UNITIG_FILE){
     ifstream unitigFile;
     unitigFile.open(UNITIG_FILE);
     
@@ -171,7 +171,7 @@ vector<string> decompress(string& s, int K){
 
 ///Users/Sherlock/Library/Developer/Xcode/DerivedData/bcl-awuuvnjbkkmukneqtvxvqashsbtu/Build/Products/Debug/tipOutput.txt
 ///Users/Sherlock/amaturWS/testEncoded.txt
-void processEncodedFile(int K=31, string ENCODED_FILE= "/Users/Sherlock/Library/Developer/Xcode/DerivedData/bcl-awuuvnjbkkmukneqtvxvqashsbtu/Build/Products/Debug/tipOutput.txt", string OUT_FA_FILE="absorbDecompressed.fa", string OUT_TXT_FILE="absorbDecompressed.txt"){
+void decodeOneAbsorb(int K=31, string ENCODED_FILE= "tipOutput.txt", string OUT_FA_FILE="absorbDecompressed.fa", string OUT_TXT_FILE="absorbDecompressed.txt"){
     ifstream encodedFile;
     encodedFile.open(ENCODED_FILE);
     

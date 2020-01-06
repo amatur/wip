@@ -1,5 +1,5 @@
 CC=g++
-CFLAGS=-c -w -std=c++11 -O2
+CFLAGS=-c -std=c++11 -O2
 
 SOURCES=main.cpp
 OBJECTS=$(SOURCES:.cpp=.o)
@@ -11,10 +11,13 @@ EXECUTABLE=main.out
 #K=11
 BCALMFILE=/Volumes/exFAT/data2019/staphsub/31/list_reads.unitigs.fa
 K=31
+BCALMFILE=/Users/Sherlock/amaturWS/data2019/staphsub/$K/list_reads.unitigs.fa
 
-all: $(SOURCES) $(EXECUTABLE) decoderd
 
-$(EXECUTABLE): $(OBJECTS)
+#all: $(SOURCES) $(EXECUTABLE) decoderd
+all: $(SOURCES) $(EXECUTABLE)
+
+$(EXECUTABLE): $(OBJECTS) *.hpp
 	$(CC) $(OBJECTS) -o $@
 
 .cpp.o:
@@ -26,18 +29,29 @@ decoderd: decoder.cpp
 	rm decoder.o
 
 clean:
-	rm -f *.o main.out incount.txt stitchedUnitigs.txt plainOutput.* stitched* plain* *.fa *.txt
+	rm -f *.o main.out incount.txt stitchedUnitigs.txt plainOutput.* stitched* plain* *.fa *.txt global_stat sub_stat
 
 .SILENT:run
 
 test:
 	./main.out -i  $(BCALMFILE) -k $(K) -f 1 -m 10 -a 1
 
+clear:
+	rm -f global_stat
+	rm -f *.txt
+	rm -f *.fa
+one:
+	./main.out -i  $(BCALMFILE) -k $(K) -m 16
+
+tip:
+	./main.out -i  $(BCALMFILE) -k $(K) -m 15
+
 run:
 	rm -f global_stat
 	#./main.out -i  $(BCALMFILE) -k $(K) -f 1 -m 15 > myout.txt
 	#./decoder.out -i tipOutput.txt -k $(K) > decot.txt
-	./main.out -i  $(BCALMFILE) -k $(K) -f 1 -m 10 -a 1
+	#./main.out -i  $(BCALMFILE) -k $(K) -f 1 -m 10 -a 1
+	./main.out -i  $(BCALMFILE) -k $(K) -m 10 -a 1
 
 	#/Volumes/exFAT/work/validation.sh $(BCALMFILE) $(K) 
 	#./gzipper.sh

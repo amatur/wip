@@ -5,6 +5,7 @@
 #define absorbGraph_hpp
 
 #include "global.hpp"
+#include <algorithm>
 
 //make the absorb graph with cycle
 void sorterIndexAndAbsorbGraphMaker(vector<MyTypes::fourtuple>& sorter, map<int, int >& sorterIndexMap, map<int, vector<edge_t> > & absorbGraph, char*& absorbedCategory){
@@ -18,8 +19,8 @@ void sorterIndexAndAbsorbGraphMaker(vector<MyTypes::fourtuple>& sorter, map<int,
         new_node_info_t nd = oldToNew[uid];
         int finalWalkId = get<1>(tup);
         
-        // ideally we should only keep one of them, either add walk start or walk end
-        if(prevWalkId !=finalWalkId ){  //walk starting
+        
+        if(prevWalkId !=finalWalkId ){  //walk starting: 2 cases-> a) this is not walk ender b) ender
             lastWalkStartingIndex = tup_i;
             sorterIndexMap[finalWalkId] = lastWalkStartingIndex;
             
@@ -144,24 +145,20 @@ string recursiveWalkStringMaker(int& startWalkIndex, vector<bool>& isItAPrintedW
     string unitigString;
     string walkString = "";
     
+    int prevWalkId=-1;
+    
     while(true){
         assert(startWalkIndex<sorter.size());
         MyTypes::fourtuple n = sorter[startWalkIndex];
-       int finalWalkId = get<1>(n);
+        int finalWalkId = get<1>(n);
        
        //@ABSORB
-       if (isItAPrintedWalk[finalWalkId]) return "";
-
+        if( MODE_ABSORPTION_NOTIP ){
+            if (isItAPrintedWalk[finalWalkId]) return "";
+        }
+        
+      
        int uid = get<0>(n);
-        
-//        if(uid==4869){
-//            cout<<"";
-//        }
-        
-//        if(finalWalkId==11){
-//            cout<<"";
-//        }
-        
        int pos_in_walk = get<2>(n);
        int isTip = get<3>(n);
        //cout<<uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
@@ -190,7 +187,7 @@ string recursiveWalkStringMaker(int& startWalkIndex, vector<bool>& isItAPrintedW
             }
         }
         
-        if(pos_in_walk == 1 && absorbedCategory[uid]=='0'){
+        if(pos_in_walk == 1 && absorbedCategory[uid]=='0' && MODE_ABSORPTION_NOTIP){
             walkString+= cutSuf(unitigString, K);
 
             while(!stType34.empty()){
@@ -209,7 +206,7 @@ string recursiveWalkStringMaker(int& startWalkIndex, vector<bool>& isItAPrintedW
         }
         
         
-        if(pos_in_walk != 1 && absorbedCategory[uid]=='0'){
+        if(pos_in_walk != 1 && absorbedCategory[uid]=='0' && MODE_ABSORPTION_NOTIP){
             while(!stType34.empty()){
                 int sindex = sorterIndexMap[oldToNew[stType34.top().toNode].finalWalkId];
                 stType34.pop();
@@ -224,11 +221,11 @@ string recursiveWalkStringMaker(int& startWalkIndex, vector<bool>& isItAPrintedW
                 walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory);
             }
         }
-        if(pos_in_walk != 1 && absorbedCategory[uid]!='0'){
+        if(pos_in_walk != 1 && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
             assert(false);
         }
         
-        if(pos_in_walk == 1 && absorbedCategory[uid]!='0'){
+        if(pos_in_walk == 1 && absorbedCategory[uid]!='0' && MODE_ABSORPTION_NOTIP){
             isThisAbsorbedWalk=true;
             if(absorbedCategory[uid]=='2' or absorbedCategory[uid]=='3'){
                 walkString+= cutSuf(unitigString, K);
@@ -241,7 +238,7 @@ string recursiveWalkStringMaker(int& startWalkIndex, vector<bool>& isItAPrintedW
                 walkString+= recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory);
             }
             
-            if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4'){
+            if(absorbedCategory[uid]=='1' or absorbedCategory[uid]=='4' ){
                            walkString+= cutPref(unitigString, K);
                        }
             
@@ -256,35 +253,10 @@ string recursiveWalkStringMaker(int& startWalkIndex, vector<bool>& isItAPrintedW
 
 
     
-        if(1==0 && isTip == 0){//
-        
-            if(absorbGraphCycleRemoved.count(uid) > 0){
-                stack<edge_t> st = absorbGraphCycleRemoved[uid];
-                while(!st.empty()){
-                    int st_top_uid = st.top().toNode;
-                    if(1==1){
-                        int sindex = sorterIndexMap[oldToNew[st_top_uid].finalWalkId];
-                        st.pop();
-
-                        string absorbedWalk = recursiveWalkStringMaker(sindex, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory);
-                        //depending on the type of edge
-                        if(absorbedWalk!=""){
-                            if(absorbedCategory[st_top_uid] == '1'){
-                                walkString += "{+" + absorbedWalk.substr(K - 1, absorbedWalk.length() - (K - 1)) + "}";
-                            }else if(absorbedCategory[st_top_uid] == '2'){
-                                walkString += "{-" + absorbedWalk.substr(0, unitigString.length() - (K - 1)) + "}";
-                                
-                            }else if(absorbedCategory[st_top_uid] == '3'){
-                                walkString += "(+" + absorbedWalk.substr(K - 1, absorbedWalk.length() - (K - 1)) + ")";
-                            }else if(absorbedCategory[st_top_uid] == '4'){
-                                walkString += "(-" + absorbedWalk.substr(K - 1, absorbedWalk.length() - (K - 1)) + ")";
-                            }
-                        }
-                    }else{
-                        //st.pop();
-                    }
-                }
-            }
+        if( MODE_ABSORPTION_TIP && isTip == 0){//
+            //walkString+= cutPref(unitigString, K);
+            walkString = plus_strings(walkString, unitigString, K);
+            
         }else if(isTip==1 && MODE_ABSORPTION_TIP){ //right R   R    ]   ]   ]   ]
             //cut prefix: correct
             if(0==0){
@@ -321,8 +293,10 @@ string recursiveWalkStringMaker(int& startWalkIndex, vector<bool>& isItAPrintedW
             tipDebugFile<<walkString<<endl;
           //  tipFile<< walkString<<endl;
             
+            if(MODE_ABSORPTION_NOTIP){
+                isItAPrintedWalk[finalWalkId] = true;
+            }
             
-            isItAPrintedWalk[finalWalkId] = true;
             break;
         }else if(get<1>(sorter[startWalkIndex+1]) != finalWalkId){
                         //print previous walk
@@ -361,12 +335,23 @@ void tipAbsorbedOutputter(vector<MyTypes::fourtuple>& sorter, map<int, int >& so
         string walkString = recursiveWalkStringMaker(it, isItAPrintedWalk, sorter, sorterIndexMap,  absorbGraphCycleRemoved, orderOfUnitigs, absorbedCategory);
         //tipDebugFile<<">"<<finalWalkId << " " << uid<<" " <<finalWalkId<<" "<<pos_in_walk<<" "<<isTip<<endl;
         
-        if(walkString!=""){
+        if(walkString!="" && MODE_ABSORPTION_NOTIP){
             V_tip_ustitch++;
             C_tip_ustitch+=walkString.length();
             
            // tipDebugFile<<walkString<<endl;
-            tipFile<< walkString<<endl;
+            tipFile<< ">\n"<< walkString<<endl;
+            C_oneabsorb+=walkString.length();
+            V_oneabsorb++;
+            
+            int brackets1 = std::count(walkString.begin(), walkString.end(), '[');
+            int brackets2 = std::count(walkString.begin(), walkString.end(), ']');
+             int stringPlus = std::count(walkString.begin(), walkString.end(), '+');
+               int stringMinus = std::count(walkString.begin(), walkString.end(), '-');
+            
+            C_oneabsorb_ACGT +=walkString.length() -brackets1- brackets2 -stringPlus-stringMinus;
+            C_oneabsorb_plusminus += stringPlus +stringMinus;
+            C_oneabsorb_brackets +=brackets1+brackets2;
         }
     }
     
@@ -378,6 +363,7 @@ void tipAbsorbedOutputter(vector<MyTypes::fourtuple>& sorter, map<int, int >& so
             it++;
             if(it>=sorter.size()) break;
         }else{
+            assert(false);
             //n = sorter[sorterIndexMap[orderOfUnitigs.front()]];
             it = sorterIndexMap[oldToNew[orderOfUnitigs.front()].finalWalkId];
             orderOfUnitigs.pop();
@@ -391,7 +377,21 @@ void tipAbsorbedOutputter(vector<MyTypes::fourtuple>& sorter, map<int, int >& so
             C_tip_ustitch+=walkString.length();
             
            // tipDebugFile<<walkString<<endl;
-            tipFile<< walkString<<endl;
+            tipFile<<">\n"<< walkString<<endl;
+            
+            C_oneabsorb+=walkString.length();
+            
+            
+           
+            int brackets1 = std::count(walkString.begin(), walkString.end(), '[');
+            int brackets2 = std::count(walkString.begin(), walkString.end(), ']');
+             int stringPlus = std::count(walkString.begin(), walkString.end(), '+');
+               int stringMinus = std::count(walkString.begin(), walkString.end(), '-');
+            
+            C_oneabsorb_ACGT +=walkString.length() -brackets1- brackets2 -stringPlus-stringMinus;
+            C_oneabsorb_plusminus += stringPlus +stringMinus;
+            C_oneabsorb_brackets +=brackets1+brackets2;
+            V_oneabsorb++;
         }
         //
     }
