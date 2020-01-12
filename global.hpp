@@ -41,7 +41,7 @@ using namespace std;
 //int K = 31;
 //string UNITIG_FILE = "/Volumes/exFAT/data2019/chol/31/list_reads.unitigs.fa";
 
-int K = 31;
+int K = 11;
 string UNITIG_FILE = "/Users/Sherlock/amaturWS/data2019/staphsub/"+to_string(K)+"/list_reads.unitigs.fa";
 //string UNITIG_FILE = "/Users/Sherlock/amaturWS/data2019/staphsub/11/list_reads.unitigs.fa";
 
@@ -52,7 +52,7 @@ enum ALGOMODE_T { BASIC = 0, INDEGREE_DFS = 1, INDEGREE_DFS_1 = 2, OUTDEGREE_DFS
 bool FLG_NEWUB = true;
 
 DEBUGFLAG_T DBGFLAG = NONE; //NODENUMBER_DBG
-ALGOMODE_T ALGOMODE = BRACKETCOMP;
+ALGOMODE_T ALGOMODE = ONEWAYABSORPTION;
 
 bool MODE_WALK_UNION = (ALGOMODE == TWOWAYEXT);
 bool MODE_ABSORPTION_TIP = (ALGOMODE == BRACKETCOMP);
@@ -154,6 +154,11 @@ set<int> newNewMarker;
 vector<list<int> > newToOld;
 vector<int> walkFirstNode; //given a walk id, what's the first node of that walk
 unordered_map<int, vector<edge_t> > sinkSrcEdges; //int is the unitig id (old id)
+
+
+//connected component count graph
+vector<set<int> > ccAdjList;
+int absorbGraphNumCC=0;
 
 
 int C_ustitch = 0;

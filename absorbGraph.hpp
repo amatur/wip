@@ -20,6 +20,8 @@ void sorterIndexAndAbsorbGraphMaker(vector<MyTypes::fourtuple>& sorter, map<int,
         int finalWalkId = get<1>(tup);
         
         
+        
+        
         if(prevWalkId !=finalWalkId ){  //walk starting: 2 cases-> a) this is not walk ender b) ender
             lastWalkStartingIndex = tup_i;
             sorterIndexMap[finalWalkId] = lastWalkStartingIndex;
@@ -435,8 +437,66 @@ void print_absorb_graph_acyclic(map<int,stack<edge_t> > const &m)
 
 
 
+void ccDFS(int start, vector<bool> &ccVisited, int &count)
+{
+  ccVisited[start] = true;
+  count++;
+    for (int elem : ccAdjList[start])
+    {
+        if(ccVisited[elem] == false){
+            //nodes.push_back(elem);
+            ccDFS(elem, ccVisited, count);
+        }
+            
+    }
+}
+
+
 void absorptionManager(vector<MyTypes::fourtuple> sorter) {
 
+    vector<bool> ccVisited;
+    for(int i = 0; i<countNewNode; i++){
+        ccVisited.push_back(false);
+        set<int> myset{};
+        ccAdjList.push_back(myset);
+    }
+    //connected component block
+    for(int uid = 0; uid <adjList.size(); uid++){
+        vector<edge_t> adju = adjList.at(uid);
+        for (edge_t e : adju) {
+            int absorberWalk = oldToNew[e.toNode].finalWalkId;
+            int absorbedWalk = oldToNew[uid].finalWalkId;
+
+            if(absorberWalk != absorbedWalk){
+                ccAdjList[absorberWalk].insert(absorbedWalk);
+                ccAdjList[absorbedWalk].insert(absorberWalk);
+            }
+        }
+    }
+    
+    
+    for(int i=0;i<countNewNode;i++)
+    {
+        
+      if(ccVisited[i] == false &&  !obsoleteWalkId[i])
+      {
+          //vector<int>nodes;
+          //nodes.push_back(i);
+         absorbGraphNumCC++;
+         int count=0;
+         ccDFS(i,ccVisited,count);
+         //cout<<"This component has "<<count<<" nodes"<<"\n";
+//          for(int nn:nodes){
+//              cout<<nn<<",";
+//          }
+          //cout<<endl;
+      }
+        
+    }
+    cout<<"number of connected components: "<<absorbGraphNumCC<<endl;
+    
+    
+    
     if(DBGFLAG==PRINTER){
         //    int uid = get<0>(n);
         //    int finalWalkId = get<1>(n);

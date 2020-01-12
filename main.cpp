@@ -1447,6 +1447,8 @@ int main(int argc, char** argv) {
         globalStatFile << "C_ONEABSORB_PLUSMINUS_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_plusminus << endl;
         
         globalStatFile << "C_ONEABSORB_BRACKETS_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_brackets << endl;
+        
+        globalStatFile << "ABSORB_GRAPH_NUM_CC" <<  "=" <<absorbGraphNumCC << endl;
        
     }
     
