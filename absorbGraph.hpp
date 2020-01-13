@@ -451,52 +451,51 @@ void ccDFS(int start, vector<bool> &ccVisited, int &count)
     }
 }
 
+void connectedComponent(){
+     vector<bool> ccVisited;
+        for(int i = 0; i<countNewNode; i++){
+            ccVisited.push_back(false);
+            set<int> myset{};
+            ccAdjList.push_back(myset);
+        }
+        //connected component block
+        for(int uid = 0; uid <adjList.size(); uid++){
+            vector<edge_t> adju = adjList.at(uid);
+            for (edge_t e : adju) {
+                int absorberWalk = oldToNew[e.toNode].finalWalkId;
+                int absorbedWalk = oldToNew[uid].finalWalkId;
+
+                if(absorberWalk != absorbedWalk){
+                    ccAdjList[absorberWalk].insert(absorbedWalk);
+                    ccAdjList[absorbedWalk].insert(absorberWalk);
+                }
+            }
+        }
+        
+        
+        for(int i=0;i<countNewNode;i++)
+        {
+            
+          if(ccVisited[i] == false &&  !obsoleteWalkId[i])
+          {
+              //vector<int>nodes;
+              //nodes.push_back(i);
+             absorbGraphNumCC++;
+             int count=0;
+             ccDFS(i,ccVisited,count);
+             //cout<<"This component has "<<count<<" nodes"<<"\n";
+    //          for(int nn:nodes){
+    //              cout<<nn<<",";
+    //          }
+              //cout<<endl;
+          }
+            
+        }
+        cout<<"number of connected components: "<<absorbGraphNumCC<<endl;
+}
 
 void absorptionManager(vector<MyTypes::fourtuple> sorter) {
 
-    vector<bool> ccVisited;
-    for(int i = 0; i<countNewNode; i++){
-        ccVisited.push_back(false);
-        set<int> myset{};
-        ccAdjList.push_back(myset);
-    }
-    //connected component block
-    for(int uid = 0; uid <adjList.size(); uid++){
-        vector<edge_t> adju = adjList.at(uid);
-        for (edge_t e : adju) {
-            int absorberWalk = oldToNew[e.toNode].finalWalkId;
-            int absorbedWalk = oldToNew[uid].finalWalkId;
-
-            if(absorberWalk != absorbedWalk){
-                ccAdjList[absorberWalk].insert(absorbedWalk);
-                ccAdjList[absorbedWalk].insert(absorberWalk);
-            }
-        }
-    }
-    
-    
-    for(int i=0;i<countNewNode;i++)
-    {
-        
-      if(ccVisited[i] == false &&  !obsoleteWalkId[i])
-      {
-          //vector<int>nodes;
-          //nodes.push_back(i);
-         absorbGraphNumCC++;
-         int count=0;
-         ccDFS(i,ccVisited,count);
-         //cout<<"This component has "<<count<<" nodes"<<"\n";
-//          for(int nn:nodes){
-//              cout<<nn<<",";
-//          }
-          //cout<<endl;
-      }
-        
-    }
-    cout<<"number of connected components: "<<absorbGraphNumCC<<endl;
-    
-    
-    
     if(DBGFLAG==PRINTER){
         //    int uid = get<0>(n);
         //    int finalWalkId = get<1>(n);

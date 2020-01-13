@@ -1345,7 +1345,10 @@ int main(int argc, char** argv) {
     //    }
     
     if(ALGOMODE == PROFILE_ONLY){
+        connectedComponent();
         printf("\n");
+
+        globalStatFile << "ABSORB_GRAPH_NUM_CC" <<  "=" <<absorbGraphNumCC << endl;
         return 0;
     }
     
@@ -1442,16 +1445,17 @@ int main(int argc, char** argv) {
     globalStatFile << "TIME_READINPUT_SEC_" << mapmode[ALGOMODE].c_str() <<  "=" <<TIME_READ_SEC << endl;
     globalStatFile << "TIME_TOTAL_SEC_" << mapmode[ALGOMODE].c_str() <<  "=" <<TIME_TOTAL_SEC << endl;
     
+    
+    
     if(ALGOMODE == ONEWAYABSORPTION){
     globalStatFile << "C_ONEABSORB_ACGT_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_ACGT << endl;
         globalStatFile << "C_ONEABSORB_PLUSMINUS_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_plusminus << endl;
         
         globalStatFile << "C_ONEABSORB_BRACKETS_" << mapmode[ALGOMODE].c_str() <<  "=" <<C_oneabsorb_brackets << endl;
         
-        globalStatFile << "ABSORB_GRAPH_NUM_CC" <<  "=" <<absorbGraphNumCC << endl;
+        
        
     }
-    
     globalStatFile.close();
     fclose(statFile);
     
